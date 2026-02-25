@@ -33,3 +33,23 @@ test_venv/
 htmlcov/
 .coverage
 .pytest_cache/
+
+# Next.js
+.next/
+out/
+
+# Node
+node_modules/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Vercel
+.vercel
+
+# Generated posters (local dev)
+posters/
+tmp/

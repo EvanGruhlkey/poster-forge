@@ -1,0 +1,173 @@
+export type JobStatus = "queued" | "running" | "done" | "failed";
+
+export interface Profile {
+  id: string;
+  email: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  created_at: string;
+}
+
+export interface Plan {
+  id: string;
+  slug: string;
+  name: string;
+  price_monthly: number;
+  monthly_quota: number | null;
+  day_pass_hours: number | null;
+  stripe_price_id: string | null;
+}
+
+export interface Subscription {
+  id: string;
+  user_id: string;
+  plan_slug: string;
+  status: string;
+  current_period_end: string | null;
+  stripe_customer_id: string | null;
+  stripe_sub_id: string | null;
+  created_at: string;
+}
+
+export interface GeocodeCache {
+  id: string;
+  query_text: string;
+  lat: number;
+  lon: number;
+  display_name: string | null;
+  bbox: Record<string, number> | null;
+  provider: string;
+  created_at: string;
+}
+
+export interface PosterConfig {
+  style_id: string;
+  city: string;
+  country: string;
+  lat: number;
+  lon: number;
+  distance: number;
+  width: number;
+  height: number;
+  orientation: "portrait" | "landscape" | "square";
+  show_labels: boolean;
+  show_water: boolean;
+  show_parks: boolean;
+  major_roads_only: boolean;
+  show_border: boolean;
+  title: string;
+  subtitle: string;
+  date_line: string;
+  format: "png" | "pdf" | "svg";
+}
+
+export interface PosterJob {
+  id: string;
+  user_id: string;
+  status: JobStatus;
+  input: PosterConfig;
+  config_hash: string;
+  output: PosterJobOutput | null;
+  error: string | null;
+  is_preview: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PosterJobOutput {
+  pdf?: string;
+  png_24x36?: string;
+  png_18x24?: string;
+  png_12x18?: string;
+  png_11x14?: string;
+  png_8x10?: string;
+  preview?: string;
+  svg?: string;
+}
+
+export interface Poster {
+  id: string;
+  user_id: string;
+  job_id: string;
+  title: string;
+  subtitle: string | null;
+  location_text: string;
+  config: PosterConfig;
+  config_hash: string;
+  storage_paths: PosterJobOutput;
+  preview_url: string | null;
+  created_at: string;
+}
+
+export interface Usage {
+  id: string;
+  user_id: string;
+  period_start: string;
+  period_end: string;
+  posters_generated: number;
+}
+
+export const STYLE_PRESETS: Record<
+  string,
+  { name: string; theme: string; bgColor: string; textColor: string }
+> = {
+  classic: {
+    name: "Classic",
+    theme: "warm_beige",
+    bgColor: "#F5F0E8",
+    textColor: "#6B5B4F",
+  },
+  modern: {
+    name: "Modern",
+    theme: "blueprint",
+    bgColor: "#1A3A5C",
+    textColor: "#E8F4FF",
+  },
+  night: {
+    name: "Night",
+    theme: "midnight_blue",
+    bgColor: "#0A1628",
+    textColor: "#D4AF37",
+  },
+  blueprint: {
+    name: "Blueprint",
+    theme: "blueprint",
+    bgColor: "#1A3A5C",
+    textColor: "#E8F4FF",
+  },
+  noir: {
+    name: "Noir",
+    theme: "noir",
+    bgColor: "#0A0A0A",
+    textColor: "#FFFFFF",
+  },
+};
+
+export const POSTER_SIZES = [
+  { label: '24"x36"', width: 12, height: 18, key: "png_24x36" },
+  { label: '18"x24"', width: 9, height: 12, key: "png_18x24" },
+  { label: '12"x18"', width: 6, height: 9, key: "png_12x18" },
+  { label: '11"x14"', width: 5.5, height: 7, key: "png_11x14" },
+  { label: '8"x10"', width: 4, height: 5, key: "png_8x10" },
+] as const;
+
+export const DEFAULT_CONFIG: PosterConfig = {
+  style_id: "classic",
+  city: "",
+  country: "",
+  lat: 0,
+  lon: 0,
+  distance: 10000,
+  width: 12,
+  height: 16,
+  orientation: "portrait",
+  show_labels: true,
+  show_water: true,
+  show_parks: true,
+  major_roads_only: false,
+  show_border: false,
+  title: "",
+  subtitle: "",
+  date_line: "",
+  format: "png",
+};
