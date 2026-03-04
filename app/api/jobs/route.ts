@@ -59,8 +59,8 @@ export async function POST(request: Request) {
       }
     }
 
-    // Check usage/quota
-    if (!is_preview) {
+    // Check subscription & quota
+    {
       const admin = createAdminClient();
       const { data: sub } = await admin
         .from("subscriptions")
@@ -78,42 +78,54 @@ export async function POST(request: Request) {
         );
       }
 
-      // Check day pass expiry
-      if (sub.plan_slug === "day_pass" && sub.current_period_end) {
-        if (new Date(sub.current_period_end) < new Date()) {
-          return NextResponse.json(
-            { error: "Day pass has expired." },
-            { status: 403 }
-          );
-        }
-      }
-
-      // Check monthly quota
-      if (sub.plan_slug !== "day_pass") {
+      if (sub.plan_slug !== "pro_plus") {
         const { data: plan } = await admin
           .from("plans")
-          .select("monthly_quota")
+          .select("monthly_quota, monthly_download_quota")
           .eq("slug", sub.plan_slug)
           .single();
 
-        if (plan?.monthly_quota) {
-          const periodStart = new Date();
-          periodStart.setDate(1);
-          periodStart.setHours(0, 0, 0, 0);
+        const periodStart = new Date();
+        periodStart.setDate(1);
+        periodStart.setHours(0, 0, 0, 0);
 
-          const { count } = await admin
-            .from("poster_jobs")
-            .select("*", { count: "exact", head: true })
-            .eq("user_id", user.id)
-            .eq("status", "done")
-            .eq("is_preview", false)
-            .gte("created_at", periodStart.toISOString());
+        if (is_preview) {
+          // Check design (preview) quota
+          const designQuota = plan?.monthly_quota;
+          if (designQuota) {
+            const { count } = await admin
+              .from("poster_jobs")
+              .select("*", { count: "exact", head: true })
+              .eq("user_id", user.id)
+              .eq("status", "done")
+              .eq("is_preview", true)
+              .gte("created_at", periodStart.toISOString());
 
-          if ((count || 0) >= plan.monthly_quota) {
-            return NextResponse.json(
-              { error: "Monthly quota reached. Please upgrade your plan." },
-              { status: 403 }
-            );
+            if ((count || 0) >= designQuota) {
+              return NextResponse.json(
+                { error: "Monthly design limit reached. Upgrade for more." },
+                { status: 403 }
+              );
+            }
+          }
+        } else {
+          // Check download quota
+          const downloadQuota = plan?.monthly_download_quota;
+          if (downloadQuota) {
+            const { count } = await admin
+              .from("poster_jobs")
+              .select("*", { count: "exact", head: true })
+              .eq("user_id", user.id)
+              .eq("status", "done")
+              .eq("is_preview", false)
+              .gte("created_at", periodStart.toISOString());
+
+            if ((count || 0) >= downloadQuota) {
+              return NextResponse.json(
+                { error: "Monthly download limit reached. Upgrade for more." },
+                { status: 403 }
+              );
+            }
           }
         }
       }

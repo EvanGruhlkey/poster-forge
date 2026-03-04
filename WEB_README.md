@@ -1,4 +1,4 @@
-# PosterForge Web App
+# Poster Armory Web App
 
 A production-ready SaaS web application that lets users generate customizable city map posters and download print-ready files.
 
@@ -83,7 +83,7 @@ In your Supabase dashboard:
 
 1. **Email Auth:** Enable email magic link in Authentication → Providers → Email
 2. **Google OAuth:** Enable Google provider with your OAuth credentials
-3. **Redirect URLs:** Add `http://localhost:3000/api/auth/callback` to allowed redirect URLs
+3. **Redirect URLs:** Add `http://localhost:3000/auth/callback` to allowed redirect URLs
 
 ### 6. Stripe Configuration
 

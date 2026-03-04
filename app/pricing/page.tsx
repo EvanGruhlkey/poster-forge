@@ -52,10 +52,7 @@ export default function PricingPage() {
 
           <div className="mt-12 text-center">
             <p className="text-sm text-muted-foreground">
-              All plans include access to all 17 themes, high-resolution
-              downloads, and multiple print sizes.
-              <br />
-              Map data &copy; OpenStreetMap contributors.
+              Cancel anytime. No contracts. Map data &copy; OpenStreetMap contributors.
             </p>
           </div>
         </div>

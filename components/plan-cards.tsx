@@ -11,54 +11,65 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { CheckCircle, Loader2, Zap } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Zap } from "lucide-react";
 import { toast } from "sonner";
+
+interface Feature {
+  text: string;
+  included: boolean;
+}
 
 const PLANS = [
   {
-    slug: "day_pass",
-    name: "Day Pass",
-    price: "$19",
-    period: "",
-    description: "24 Hours Unlimited",
+    slug: "basic",
+    name: "Basic",
+    price: "$5",
+    period: "/month",
+    tagline: "Make a meaningful gift.",
     features: [
-      "Unlimited maps for 24 hours",
-      "All 17 themes included",
-      "High-res PDF & PNG downloads",
-      "Multiple print sizes (8×10 to 24×36)",
-    ],
+      { text: "10 poster designs (previews) per month", included: true },
+      { text: "2 high-resolution downloads per month", included: true },
+      { text: "Standard themes only", included: true },
+      { text: "One print size", included: true },
+      { text: "Zoom & rotation controls", included: false },
+      { text: "Poster library", included: false },
+    ] as Feature[],
     highlight: false,
+    color: "green",
   },
   {
     slug: "pro",
-    name: "Pro Plan",
-    price: "$29",
+    name: "Pro",
+    price: "$15",
     period: "/month",
-    description: "50 Maps Per Month",
+    tagline: "Full creative freedom.",
     features: [
-      "50 maps per month",
-      "All 17 themes included",
-      "High-res PDF & PNG downloads",
-      "Multiple print sizes (8×10 to 24×36)",
-      "Priority generation",
-    ],
+      { text: "25 poster designs per month", included: true },
+      { text: "10 high-resolution downloads per month", included: true },
+      { text: "All themes unlocked", included: true },
+      { text: "Multiple print sizes", included: true },
+      { text: "Zoom, rotation & fine positioning", included: true },
+      { text: "Poster library — save your designs", included: true },
+    ] as Feature[],
     highlight: true,
+    color: "blue",
   },
   {
-    slug: "business",
-    name: "Business",
-    price: "$49",
+    slug: "pro_plus",
+    name: "Pro+",
+    price: "$25",
     period: "/month",
-    description: "200 Maps Per Month",
+    tagline: "Never think about limits.",
     features: [
-      "200 maps per month",
-      "All 17 themes included",
-      "High-res PDF & PNG downloads",
-      "Multiple print sizes (8×10 to 24×36)",
-      "Priority generation",
-      "Commercial usage license",
-    ],
+      { text: "Unlimited poster designs (fair use)", included: true },
+      { text: "Unlimited high-resolution downloads", included: true },
+      { text: "All themes unlocked", included: true },
+      { text: "Multiple print sizes", included: true },
+      { text: "Zoom, rotation & fine positioning", included: true },
+      { text: "Poster library — save your designs", included: true },
+    ] as Feature[],
     highlight: false,
+    color: "purple",
   },
 ];
 
@@ -132,18 +143,25 @@ export function PlanCards({ isLoggedIn, currentPlanSlug }: PlanCardsProps) {
               <CardTitle className="text-xl">{plan.name}</CardTitle>
               <div className="mt-2">
                 <span className="text-4xl font-bold">{plan.price}</span>
-                {plan.period && (
-                  <span className="text-muted-foreground">{plan.period}</span>
-                )}
+                <span className="text-muted-foreground">{plan.period}</span>
               </div>
-              <CardDescription>{plan.description}</CardDescription>
+              <CardDescription className="mt-1">{plan.tagline}</CardDescription>
             </CardHeader>
             <CardContent className="flex-1">
               <ul className="space-y-3">
                 {plan.features.map((feature, i) => (
-                  <li key={i} className="flex items-center gap-2 text-sm">
-                    <CheckCircle className="h-4 w-4 shrink-0 text-primary" />
-                    {feature}
+                  <li
+                    key={i}
+                    className={`flex items-center gap-2 text-sm ${
+                      feature.included ? "" : "text-muted-foreground"
+                    }`}
+                  >
+                    {feature.included ? (
+                      <CheckCircle className="h-4 w-4 shrink-0 text-primary" />
+                    ) : (
+                      <XCircle className="h-4 w-4 shrink-0 text-muted-foreground/50" />
+                    )}
+                    {feature.text}
                   </li>
                 ))}
               </ul>
@@ -163,11 +181,7 @@ export function PlanCards({ isLoggedIn, currentPlanSlug }: PlanCardsProps) {
                   {isLoading ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : null}
-                  {isCurrent
-                    ? "Current Plan"
-                    : currentPlanSlug
-                      ? "Switch Plan"
-                      : "Get Started"}
+                  {currentPlanSlug ? "Switch Plan" : "Get Started"}
                 </Button>
               )}
             </CardFooter>

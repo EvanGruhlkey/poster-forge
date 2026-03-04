@@ -39,10 +39,12 @@ interface SubscriptionData {
   plan?: {
     name: string;
     monthly_quota: number | null;
-    day_pass_hours: number | null;
+    monthly_download_quota: number | null;
   };
-  usage?: number;
-  quota?: number | null;
+  designUsage?: number;
+  downloadUsage?: number;
+  designQuota?: number | null;
+  downloadQuota?: number | null;
 }
 
 export default function BillingPage() {
@@ -165,47 +167,67 @@ export default function BillingPage() {
                 <div className="flex items-start gap-3">
                   <Clock className="mt-0.5 h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="text-sm font-medium">
-                      {sub.plan_slug === "day_pass" ? "Expires" : "Renews"}
-                    </p>
+                    <p className="text-sm font-medium">Renews</p>
                     <p className="text-sm text-muted-foreground">
                       {new Date(sub.current_period_end).toLocaleDateString(
                         undefined,
-                        {
-                          month: "long",
-                          day: "numeric",
-                          year: "numeric",
-                          hour: sub.plan_slug === "day_pass" ? "numeric" : undefined,
-                          minute: sub.plan_slug === "day_pass" ? "numeric" : undefined,
-                        }
+                        { month: "long", day: "numeric", year: "numeric" }
                       )}
                     </p>
                   </div>
                 </div>
               )}
 
-              {data?.quota && (
-                <div className="flex items-start gap-3">
-                  <BarChart3 className="mt-0.5 h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">Usage This Month</p>
-                    <p className="text-sm text-muted-foreground">
-                      {data.usage || 0} / {data.quota} posters
-                    </p>
-                    <div className="mt-1 h-2 w-32 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-green-600 transition-all"
-                        style={{
-                          width: `${Math.min(
-                            ((data.usage || 0) / data.quota) * 100,
-                            100
-                          )}%`,
-                        }}
-                      />
+              <div className="flex items-start gap-3">
+                <BarChart3 className="mt-0.5 h-5 w-5 text-muted-foreground" />
+                <div className="space-y-2">
+                  {data?.downloadQuota ? (
+                    <>
+                      <div>
+                        <p className="text-sm font-medium">Downloads</p>
+                        <p className="text-sm text-muted-foreground">
+                          {data.downloadUsage || 0} / {data.downloadQuota} this month
+                        </p>
+                        <div className="mt-1 h-2 w-32 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-green-600 transition-all"
+                            style={{
+                              width: `${Math.min(
+                                ((data.downloadUsage || 0) / data.downloadQuota) * 100,
+                                100
+                              )}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                      {data.designQuota && (
+                        <div>
+                          <p className="text-sm font-medium">Designs</p>
+                          <p className="text-sm text-muted-foreground">
+                            {data.designUsage || 0} / {data.designQuota} this month
+                          </p>
+                          <div className="mt-1 h-2 w-32 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className="h-full rounded-full bg-blue-600 transition-all"
+                              style={{
+                                width: `${Math.min(
+                                  ((data.designUsage || 0) / data.designQuota) * 100,
+                                  100
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div>
+                      <p className="text-sm font-medium">Usage</p>
+                      <p className="text-sm text-muted-foreground">Unlimited</p>
                     </div>
-                  </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
 
             <div className="mt-6 flex gap-3">

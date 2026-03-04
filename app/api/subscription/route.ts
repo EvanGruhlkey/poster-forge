@@ -30,48 +30,47 @@ export async function GET() {
       return NextResponse.json({ active: false, subscription: null });
     }
 
-    // Check day pass expiry
-    if (sub.plan_slug === "day_pass" && sub.current_period_end) {
-      if (new Date(sub.current_period_end) < new Date()) {
-        return NextResponse.json({
-          active: false,
-          subscription: { ...sub, status: "expired" },
-          expired: true,
-        });
-      }
-    }
-
     // Fetch plan details
     const { data: plan } = await admin
       .from("plans")
-      .select("name, monthly_quota, day_pass_hours")
+      .select("name, monthly_quota, monthly_download_quota")
       .eq("slug", sub.plan_slug)
       .single();
 
     // Fetch current period usage
-    let usage = 0;
-    if (plan?.monthly_quota) {
-      const periodStart = new Date();
-      periodStart.setDate(1);
-      periodStart.setHours(0, 0, 0, 0);
+    let designUsage = 0;
+    let downloadUsage = 0;
+    const periodStart = new Date();
+    periodStart.setDate(1);
+    periodStart.setHours(0, 0, 0, 0);
 
-      const { count } = await admin
+    const [designCount, downloadCount] = await Promise.all([
+      admin
+        .from("poster_jobs")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("status", "done")
+        .gte("created_at", periodStart.toISOString()),
+      admin
         .from("poster_jobs")
         .select("*", { count: "exact", head: true })
         .eq("user_id", user.id)
         .eq("status", "done")
         .eq("is_preview", false)
-        .gte("created_at", periodStart.toISOString());
+        .gte("created_at", periodStart.toISOString()),
+    ]);
 
-      usage = count || 0;
-    }
+    designUsage = designCount.count || 0;
+    downloadUsage = downloadCount.count || 0;
 
     return NextResponse.json({
       active: true,
       subscription: sub,
       plan,
-      usage,
-      quota: plan?.monthly_quota || null,
+      designUsage,
+      downloadUsage,
+      designQuota: plan?.monthly_quota || null,
+      downloadQuota: plan?.monthly_download_quota || null,
     });
   } catch (err) {
     console.error("GET /api/subscription error:", err);

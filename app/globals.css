@@ -35,3 +35,24 @@
     @apply bg-background text-foreground;
   }
 }
+
+.protected-image-container img {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+}
+
+@media print {
+  .protected-image-container {
+    display: none !important;
+  }
+  body::after {
+    content: "Printing is disabled for protected content.";
+    display: block;
+    text-align: center;
+    padding: 4rem;
+    font-size: 1.25rem;
+    color: #666;
+  }
+}

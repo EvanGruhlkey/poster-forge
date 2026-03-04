@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "PosterForge - Custom Map Art Posters",
+  title: "Poster Armory - Custom Map Art Posters",
   description:
     "Create beautiful, customizable city map posters. Pick any location, choose your style, and download print-ready files.",
 };

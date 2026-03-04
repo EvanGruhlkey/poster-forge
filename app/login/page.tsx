@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -15,12 +15,18 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Mail, Loader2, MapPin } from "lucide-react";
-import { toast, Toaster } from "sonner";
+import { Loader2, MapPin, LogIn } from "lucide-react";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading...</div>}>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          Loading...
+        </div>
+      }
+    >
       <LoginContent />
     </Suspense>
   );
@@ -28,27 +34,50 @@ export default function LoginPage() {
 
 function LoginContent() {
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [magicLinkSent, setMagicLinkSent] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/app";
 
   const supabase = createClient();
+  const errorParam = searchParams.get("error");
 
-  async function handleMagicLink(e: React.FormEvent) {
+  useEffect(() => {
+    if (errorParam) {
+      toast.error("Sign-in failed. Please try again.");
+    }
+  }, [errorParam]);
+
+  async function handleEmailAuth(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/api/auth/callback?next=${redirect}`,
-      },
-    });
-    setLoading(false);
-    if (error) {
-      toast.error(error.message);
+
+    if (isSignUp) {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      setLoading(false);
+      if (error) {
+        toast.error(error.message);
+      } else if (data.session) {
+        window.location.href = redirect;
+      } else {
+        toast.success("Account created! You can now sign in.");
+        setIsSignUp(false);
+      }
     } else {
-      setMagicLinkSent(true);
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      setLoading(false);
+      if (error) {
+        toast.error(error.message);
+      } else {
+        window.location.href = redirect;
+      }
     }
   }
 
@@ -56,7 +85,10 @@ function LoginContent() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/api/auth/callback?next=${redirect}`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${redirect}`,
+        queryParams: {
+          prompt: "select_account",
+        },
       },
     });
     if (error) toast.error(error.message);
@@ -64,20 +96,23 @@ function LoginContent() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
-      <Toaster position="top-center" />
       <Link
         href="/"
         className="mb-8 flex items-center gap-2 text-2xl font-bold text-foreground"
       >
         <MapPin className="h-7 w-7" />
-        PosterForge
+        Poster Armory
       </Link>
 
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Welcome back</CardTitle>
+          <CardTitle className="text-2xl">
+            {isSignUp ? "Create an account" : "Welcome back"}
+          </CardTitle>
           <CardDescription>
-            Sign in to create beautiful map posters
+            {isSignUp
+              ? "Sign up to start creating map posters"
+              : "Sign in to create beautiful map posters"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -113,37 +148,50 @@ function LoginContent() {
             <Separator className="flex-1" />
           </div>
 
-          {magicLinkSent ? (
-            <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center">
-              <Mail className="mx-auto mb-2 h-8 w-8 text-green-600" />
-              <p className="font-medium text-green-900">Check your email</p>
-              <p className="mt-1 text-sm text-green-700">
-                We sent a magic link to <strong>{email}</strong>
-              </p>
+          <form onSubmit={handleEmailAuth} className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
             </div>
-          ) : (
-            <form onSubmit={handleMagicLink} className="space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Mail className="mr-2 h-4 w-4" />
-                )}
-                Send Magic Link
-              </Button>
-            </form>
-          )}
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder={isSignUp ? "Create a password" : "Your password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <LogIn className="mr-2 h-4 w-4" />
+              )}
+              {isSignUp ? "Sign Up" : "Sign In"}
+            </Button>
+          </form>
+
+          <p className="text-center text-sm text-muted-foreground">
+            {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
+            <button
+              type="button"
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="font-medium text-foreground underline underline-offset-4 hover:text-primary"
+            >
+              {isSignUp ? "Sign in" : "Sign up"}
+            </button>
+          </p>
         </CardContent>
       </Card>
 

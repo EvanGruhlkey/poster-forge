@@ -11,7 +11,7 @@ export function Footer() {
             className="flex items-center gap-2 text-sm font-semibold text-muted-foreground"
           >
             <MapPin className="h-4 w-4" />
-            PosterForge
+            Poster Armory
           </Link>
           <p className="text-xs text-muted-foreground">
             Map data &copy; OpenStreetMap contributors

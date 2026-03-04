@@ -4,7 +4,7 @@ import { stripe, PLAN_PRICE_MAP } from "@/lib/stripe";
 import { z } from "zod";
 
 const checkoutSchema = z.object({
-  planSlug: z.enum(["day_pass", "pro", "business"]),
+  planSlug: z.enum(["basic", "pro", "pro_plus"]),
 });
 
 export async function POST(request: Request) {

@@ -1,10 +1,10 @@
 import * as dotenv from "dotenv";
-dotenv.config({ path: ".env.local" });
+import * as path from "path";
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local"), override: true });
 
 import { createClient } from "@supabase/supabase-js";
 import { spawn } from "child_process";
 import * as fs from "fs";
-import * as path from "path";
 import * as crypto from "crypto";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -346,7 +346,7 @@ async function pollForJobs() {
 }
 
 async function main() {
-  console.log("PosterForge Worker started");
+  console.log("Poster Armory Worker started");
   console.log(`  Supabase URL: ${SUPABASE_URL}`);
   console.log(`  Python: ${PYTHON_EXECUTABLE}`);
   console.log(`  CLI: ${POSTER_CLI_PATH}`);

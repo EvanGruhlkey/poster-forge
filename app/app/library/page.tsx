@@ -1,11 +1,12 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Button } from "@/components/ui/button";
 import { PosterCard } from "@/components/poster-card";
-import { MapPin, Plus } from "lucide-react";
+import { MapPin, Plus, Crown } from "lucide-react";
 import type { Poster, PosterJob } from "@/lib/types";
 
 export default async function LibraryPage() {
@@ -17,6 +18,38 @@ export default async function LibraryPage() {
 
   if (!user) {
     return null;
+  }
+
+  const admin = createAdminClient();
+  const { data: sub } = await admin
+    .from("subscriptions")
+    .select("plan_slug")
+    .eq("user_id", user.id)
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  const planSlug = sub?.plan_slug;
+
+  if (!planSlug || planSlug === "basic") {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-20 text-center">
+        <Crown className="mx-auto mb-4 h-12 w-12 text-amber-500" />
+        <h1 className="text-2xl font-bold mb-2">Poster Library</h1>
+        <p className="text-muted-foreground mb-6">
+          Save and revisit your poster designs anytime. The poster library is available on Pro and Pro+ plans.
+        </p>
+        <div className="flex justify-center gap-3">
+          <Button asChild variant="outline">
+            <Link href="/app">Create a Poster</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/app/billing">Upgrade to Pro</Link>
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   const [postersResult, jobsResult] = await Promise.all([
@@ -37,7 +70,6 @@ export default async function LibraryPage() {
   const activeJobs = (jobsResult.data as PosterJob[]) || [];
 
   // Generate signed preview URLs for each poster
-  const admin = createAdminClient();
   const postersWithPreviews = await Promise.all(
     posters.map(async (poster) => {
       const previewPath = poster.storage_paths?.preview;

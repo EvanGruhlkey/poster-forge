@@ -1,4 +1,4 @@
--- PosterForge Database Schema
+-- Poster Armory Database Schema
 
 -- 1. Profiles
 create table public.profiles (

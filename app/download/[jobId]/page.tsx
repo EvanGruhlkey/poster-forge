@@ -21,8 +21,16 @@ import {
   XCircle,
   Clock,
   ArrowLeft,
+  Lock,
 } from "lucide-react";
 import type { PosterJobOutput } from "@/lib/types";
+import {
+  type PlanTier,
+  getPlanTier,
+  isFormatAllowed,
+  PLAN_ENTITLEMENTS,
+  fileKeyToFormat,
+} from "@/lib/plan-config";
 
 interface JobStatusResponse {
   id: string;
@@ -36,6 +44,7 @@ export default function DownloadPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const [job, setJob] = useState<JobStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [planTier, setPlanTier] = useState<PlanTier>("none");
   const triggerDownload = useCallback(
     (fileKey: string) => {
       const link = document.createElement("a");
@@ -48,6 +57,13 @@ export default function DownloadPage() {
     },
     [jobId]
   );
+
+  useEffect(() => {
+    fetch("/api/subscription")
+      .then((r) => r.json())
+      .then((d) => setPlanTier(getPlanTier(d.plan?.slug)))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!jobId) return;
@@ -137,38 +153,67 @@ export default function DownloadPage() {
                 {Object.keys(job.output)
                   .filter((key) => key !== "preview")
                   .map((key) => {
-                    const ext = key.includes("pdf") ? "pdf" : "png";
+                    const ext = key.includes("pdf")
+                      ? "pdf"
+                      : key.includes("svg")
+                        ? "svg"
+                        : "png";
                     const label = key
                       .replace(/_/g, " ")
                       .replace("png ", "PNG ")
-                      .replace("pdf", "PDF");
+                      .replace("pdf", "PDF")
+                      .replace("svg", "SVG");
                     const Icon = ext === "pdf" ? FileText : Image;
+                    const allowed = isFormatAllowed(planTier, key);
 
                     return (
                       <button
                         key={key}
-                        onClick={() => triggerDownload(key)}
-                        className="flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted"
+                        onClick={() => allowed && triggerDownload(key)}
+                        disabled={!allowed}
+                        className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
+                          allowed
+                            ? "hover:bg-muted"
+                            : "cursor-not-allowed opacity-50"
+                        }`}
                       >
                         <Icon className="h-5 w-5 text-muted-foreground" />
                         <div className="flex-1">
                           <p className="text-sm font-medium capitalize">
                             {label}
                           </p>
+                          {!allowed && (
+                            <p className="text-xs text-muted-foreground">
+                              Upgrade to {ext === "svg" ? "Pro+" : "Pro"} to
+                              unlock
+                            </p>
+                          )}
                         </div>
-                        <Download className="h-4 w-4 text-muted-foreground" />
+                        {allowed ? (
+                          <Download className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Lock className="h-4 w-4 text-muted-foreground" />
+                        )}
                       </button>
                     );
                   })}
 
-                <Button
-                  className="mt-4 w-full"
-                  size="lg"
-                  onClick={() => triggerDownload("pdf")}
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Download PDF
-                </Button>
+                {(() => {
+                  const formats = PLAN_ENTITLEMENTS[planTier].formats;
+                  const primaryFormat = formats.includes("pdf") ? "pdf" : formats.includes("png") ? Object.keys(job.output).find((k) => k.startsWith("png_")) || "png_18x24" : null;
+                  if (!primaryFormat) return null;
+                  const btnLabel = formats.includes("pdf") ? "Download PDF" : "Download PNG";
+                  return (
+                    <Button
+                      className="mt-4 w-full"
+                      size="lg"
+                      onClick={() => triggerDownload(primaryFormat)}
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      {btnLabel}
+                    </Button>
+                  );
+                })()}
               </div>
             )}
 

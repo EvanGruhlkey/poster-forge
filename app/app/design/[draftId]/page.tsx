@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,11 +13,24 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Download, Eye, MapPin } from "lucide-react";
+import { Loader2, Download, Eye, MapPin, Lock, Crown } from "lucide-react";
 import { toast } from "sonner";
-import { STYLE_PRESETS, type PosterConfig, DEFAULT_CONFIG } from "@/lib/types";
+import {
+  STYLE_PRESETS,
+  POSTER_SIZES,
+  type PosterConfig,
+  DEFAULT_CONFIG,
+} from "@/lib/types";
 import { ProtectedImage } from "@/components/protected-image";
+import {
+  PLAN_ENTITLEMENTS,
+  STANDARD_THEMES,
+  DEFAULT_SIZE,
+  getPlanTier,
+  type PlanTier,
+} from "@/lib/plan-config";
 
 export default function CustomizePosterPage() {
   const router = useRouter();
@@ -27,6 +40,10 @@ export default function CustomizePosterPage() {
   const country = searchParams.get("country") || "";
   const lat = parseFloat(searchParams.get("lat") || "0");
   const lon = parseFloat(searchParams.get("lon") || "0");
+
+  const [planTier, setPlanTier] = useState<PlanTier>("none");
+  const [planLoading, setPlanLoading] = useState(true);
+  const entitlements = PLAN_ENTITLEMENTS[planTier];
 
   const [config, setConfig] = useState<PosterConfig>({
     ...DEFAULT_CONFIG,
@@ -44,9 +61,29 @@ export default function CustomizePosterPage() {
     show_parks: true,
   });
 
+  const [selectedSize, setSelectedSize] = useState(DEFAULT_SIZE);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [generateLoading, setGenerateLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadPlan() {
+      try {
+        const res = await fetch("/api/subscription");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.active && data.subscription?.plan_slug) {
+            setPlanTier(getPlanTier(data.subscription.plan_slug));
+          }
+        }
+      } catch {
+        // fall through to "none"
+      } finally {
+        setPlanLoading(false);
+      }
+    }
+    loadPlan();
+  }, []);
 
   const updateConfig = useCallback(
     (updates: Partial<PosterConfig>) => {
@@ -58,21 +95,33 @@ export default function CustomizePosterPage() {
   async function handleGeneratePreview() {
     setPreviewLoading(true);
     try {
+      const submitConfig = {
+        ...config,
+        width: selectedSize.width,
+        height: selectedSize.height,
+      };
       const res = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ config, is_preview: true }),
+        body: JSON.stringify({ config: submitConfig, is_preview: true }),
       });
 
       if (!res.ok) {
         const err = await res.json();
+        if (res.status === 403) {
+          toast.error(err.error, {
+            action: { label: "Upgrade", onClick: () => router.push("/app/billing") },
+            duration: 8000,
+          });
+          setPreviewLoading(false);
+          return;
+        }
         throw new Error(err.error || "Failed to create preview job");
       }
 
       const { jobId } = await res.json();
       toast.success("Preview generation started!");
 
-      // Poll for completion
       const poll = setInterval(async () => {
         const status = await fetch(`/api/jobs/${jobId}`).then((r) => r.json());
         if (status.status === "done") {
@@ -95,20 +144,22 @@ export default function CustomizePosterPage() {
   async function handleDownloadPoster() {
     setGenerateLoading(true);
     try {
+      const submitConfig = {
+        ...config,
+        width: selectedSize.width,
+        height: selectedSize.height,
+      };
       const res = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ config, is_preview: false }),
+        body: JSON.stringify({ config: submitConfig, is_preview: false }),
       });
 
       if (!res.ok) {
         const err = await res.json();
         if (res.status === 403) {
           toast.error(err.error || "You need an active plan to generate posters.", {
-            action: {
-              label: "Choose Plan",
-              onClick: () => router.push("/app/billing"),
-            },
+            action: { label: "Upgrade", onClick: () => router.push("/app/billing") },
             duration: 8000,
           });
           setGenerateLoading(false);
@@ -129,6 +180,26 @@ export default function CustomizePosterPage() {
 
   const currentStyle = STYLE_PRESETS[config.style_id] || STYLE_PRESETS.classic;
 
+  function UpgradeBadge() {
+    return (
+      <button
+        onClick={() => router.push("/app/billing")}
+        className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 hover:bg-amber-200 transition-colors"
+      >
+        <Crown className="h-3 w-3" />
+        Pro
+      </button>
+    );
+  }
+
+  if (planLoading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8 text-center">
@@ -144,27 +215,52 @@ export default function CustomizePosterPage() {
           {/* Style */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Style</CardTitle>
+              <CardTitle className="text-base flex items-center justify-between">
+                Style
+                {!entitlements.allThemes && (
+                  <span className="text-xs font-normal text-muted-foreground">
+                    More themes with Pro
+                  </span>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
-                {Object.entries(STYLE_PRESETS).map(([id, preset]) => (
-                  <button
-                    key={id}
-                    onClick={() => updateConfig({ style_id: id })}
-                    className={`rounded-lg border-2 p-3 text-center transition-all ${
-                      config.style_id === id
-                        ? "border-primary ring-2 ring-primary/20"
-                        : "border-transparent hover:border-muted-foreground/20"
-                    }`}
-                  >
-                    <div
-                      className="mx-auto mb-2 h-8 w-8 rounded"
-                      style={{ backgroundColor: preset.bgColor }}
-                    />
-                    <span className="text-xs font-medium">{preset.name}</span>
-                  </button>
-                ))}
+                {Object.entries(STYLE_PRESETS).map(([id, preset]) => {
+                  const isStandard = STANDARD_THEMES.includes(id);
+                  const isLocked = !entitlements.allThemes && !isStandard;
+
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => {
+                        if (isLocked) {
+                          toast("Upgrade to Pro to unlock all themes.", {
+                            action: { label: "Upgrade", onClick: () => router.push("/app/billing") },
+                          });
+                          return;
+                        }
+                        updateConfig({ style_id: id });
+                      }}
+                      className={`relative rounded-lg border-2 p-3 text-center transition-all ${
+                        config.style_id === id
+                          ? "border-primary ring-2 ring-primary/20"
+                          : isLocked
+                            ? "border-transparent opacity-50"
+                            : "border-transparent hover:border-muted-foreground/20"
+                      }`}
+                    >
+                      {isLocked && (
+                        <Lock className="absolute right-1 top-1 h-3 w-3 text-muted-foreground" />
+                      )}
+                      <div
+                        className="mx-auto mb-2 h-8 w-8 rounded"
+                        style={{ backgroundColor: preset.bgColor }}
+                      />
+                      <span className="text-xs font-medium">{preset.name}</span>
+                    </button>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
@@ -175,38 +271,39 @@ export default function CustomizePosterPage() {
               <CardTitle className="text-base">Map Settings</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Zoom / radius */}
               <div className="space-y-3">
-                <Label>Radius: {(config.distance / 1000).toFixed(0)} km</Label>
-                <Slider
-                  value={[config.distance]}
-                  onValueChange={([v]) => updateConfig({ distance: v })}
-                  min={2000}
-                  max={30000}
-                  step={1000}
-                />
+                <div className="flex items-center justify-between">
+                  <Label>Radius: {(config.distance / 1000).toFixed(0)} km</Label>
+                  {!entitlements.zoomControls && <UpgradeBadge />}
+                </div>
+                {entitlements.zoomControls ? (
+                  <Slider
+                    value={[config.distance]}
+                    onValueChange={([v]) => updateConfig({ distance: v })}
+                    min={2000}
+                    max={30000}
+                    step={1000}
+                  />
+                ) : (
+                  <div className="relative">
+                    <Slider value={[10000]} min={2000} max={30000} step={1000} disabled />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Fixed at 10 km on Basic. Upgrade for zoom control.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <Separator />
 
               <div className="space-y-3">
                 {[
-                  {
-                    key: "show_labels" as const,
-                    label: "Labels",
-                  },
-                  {
-                    key: "show_water" as const,
-                    label: "Water",
-                  },
-                  {
-                    key: "show_parks" as const,
-                    label: "Parks",
-                  },
+                  { key: "show_labels" as const, label: "Labels" },
+                  { key: "show_water" as const, label: "Water" },
+                  { key: "show_parks" as const, label: "Parks" },
                 ].map(({ key, label }) => (
-                  <div
-                    key={key}
-                    className="flex items-center justify-between"
-                  >
+                  <div key={key} className="flex items-center justify-between">
                     <Label>{label}</Label>
                     <Switch
                       checked={config[key]}
@@ -215,6 +312,42 @@ export default function CustomizePosterPage() {
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Print Size */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center justify-between">
+                Print Size
+                {!entitlements.multipleSizes && <UpgradeBadge />}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {entitlements.multipleSizes ? (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+                  {POSTER_SIZES.map((size) => (
+                    <button
+                      key={size.key}
+                      onClick={() => setSelectedSize(size)}
+                      className={`rounded-lg border-2 p-2 text-center text-sm transition-all ${
+                        selectedSize.key === size.key
+                          ? "border-primary ring-2 ring-primary/20"
+                          : "border-transparent hover:border-muted-foreground/20"
+                      }`}
+                    >
+                      {size.label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border bg-muted/50 p-3">
+                  <p className="text-sm font-medium">{DEFAULT_SIZE.label}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Upgrade to Pro for all 5 print sizes.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -242,16 +375,6 @@ export default function CustomizePosterPage() {
                   onChange={(e) => updateConfig({ subtitle: e.target.value })}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="date">Date</Label>
-                <Input
-                  id="date"
-                  placeholder="August 2022"
-                  value={config.date_line}
-                  onChange={(e) => updateConfig({ date_line: e.target.value })}
-                />
-              </div>
-
               <div className="rounded-lg border bg-muted/50 p-3 text-sm text-muted-foreground">
                 {lat >= 0 ? lat.toFixed(4) : Math.abs(lat).toFixed(4)}&deg;{" "}
                 {lat >= 0 ? "N" : "S"},{" "}
@@ -266,7 +389,7 @@ export default function CustomizePosterPage() {
             <Button
               variant="outline"
               onClick={handleGeneratePreview}
-              disabled={previewLoading}
+              disabled={previewLoading || planTier === "none"}
               className="flex-1"
             >
               {previewLoading ? (
@@ -278,7 +401,7 @@ export default function CustomizePosterPage() {
             </Button>
             <Button
               onClick={handleDownloadPoster}
-              disabled={generateLoading}
+              disabled={generateLoading || planTier === "none"}
               className="flex-1"
             >
               {generateLoading ? (
@@ -289,6 +412,23 @@ export default function CustomizePosterPage() {
               Download Poster
             </Button>
           </div>
+
+          {planTier === "none" && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-center">
+              <p className="text-sm font-medium text-amber-900">
+                You need a plan to generate posters.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={() => router.push("/app/billing")}
+              >
+                <Crown className="mr-2 h-4 w-4" />
+                Choose a Plan
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Preview panel */}
@@ -359,6 +499,12 @@ export default function CustomizePosterPage() {
                     >
                       {lat.toFixed(4)}&deg; {lat >= 0 ? "N" : "S"},{" "}
                       {Math.abs(lon).toFixed(4)}&deg; {lon >= 0 ? "E" : "W"}
+                    </p>
+                    <p
+                      className="text-[10px] opacity-40 mt-1"
+                      style={{ color: currentStyle.textColor }}
+                    >
+                      {selectedSize.label}
                     </p>
                   </div>
                 </div>

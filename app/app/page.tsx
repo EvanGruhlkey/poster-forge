@@ -37,7 +37,7 @@ export default function PickLocationPage() {
       const query = locationText || `${city}, ${country}`;
       const res = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`,
-        { headers: { "User-Agent": "PosterForge/1.0" } }
+        { headers: { "User-Agent": "PosterArmory/1.0" } }
       );
       const data = await res.json();
 
