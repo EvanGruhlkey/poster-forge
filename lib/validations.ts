@@ -9,9 +9,14 @@ export const locationSchema = z.object({
 });
 
 export const posterConfigSchema = z.object({
-  style_id: z.enum(["classic", "modern", "night", "blueprint", "noir"]),
+  style_id: z.enum([
+    "warm_beige", "terracotta", "noir", "blueprint", "midnight_blue",
+    "ocean", "forest", "sunset", "autumn", "emerald",
+    "copper_patina", "japanese_ink", "pastel_dream", "monochrome_blue",
+    "neon_cyberpunk", "contrast_zones", "gradient_roads",
+  ]),
   city: z.string().min(1).max(200),
-  country: z.string().min(1).max(200),
+  country: z.string().max(200).default(""),
   lat: z.number().min(-90).max(90),
   lon: z.number().min(-180).max(180),
   distance: z.number().min(1000).max(50000),

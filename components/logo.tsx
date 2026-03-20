@@ -1,0 +1,19 @@
+export function Logo({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 64 64"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+    >
+      <path
+        d="M32 4L54 12V28C54 42 44 52 32 60C20 52 10 42 10 28V12L32 4Z"
+        fill="#17324D"
+      />
+      <path
+        d="M32 18C27.6 18 24 21.6 24 26C24 32 32 42 32 42C32 42 40 32 40 26C40 21.6 36.4 18 32 18Z"
+        fill="#F4F1EA"
+      />
+      <circle cx="32" cy="26" r="3" fill="#17324D" />
+    </svg>
+  );
+}

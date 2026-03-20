@@ -1,10 +1,24 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+function sanitizeRedirect(value: string | null): string {
+  const fallback = "/app";
+  if (!value) return fallback;
+  // Block protocol-relative URLs, absolute URLs, and anything suspicious
+  if (
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    value.includes("://")
+  ) {
+    return fallback;
+  }
+  return value;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/app";
+  const next = sanitizeRedirect(searchParams.get("next"));
 
   if (code) {
     const response = NextResponse.redirect(`${origin}${next}`);

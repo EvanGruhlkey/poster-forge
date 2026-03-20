@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { stripe } from "@/lib/stripe";
+import { applyRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
@@ -15,6 +16,9 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const limited = applyRateLimit(user.id, "fulfill", { windowMs: 60_000, max: 10 });
+    if (limited) return limited;
 
     const { sessionId } = await request.json();
     if (!sessionId || typeof sessionId !== "string") {
@@ -33,7 +37,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify this session belongs to this user
     if (session.metadata?.user_id !== user.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
@@ -48,13 +51,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if this exact session was already fulfilled (idempotent)
+    // Idempotency: skip if this checkout session was already fulfilled
+    // (handles race between webhook and this endpoint)
     const { data: existingFromSession } = await admin
       .from("subscriptions")
-      .select("id, plan_slug")
-      .eq("user_id", user.id)
-      .eq("plan_slug", planSlug)
-      .eq("status", "active")
+      .select("id")
+      .eq("stripe_checkout_session_id", sessionId)
       .limit(1)
       .single();
 
@@ -62,14 +64,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: "already_active" });
     }
 
-    // Deactivate any previous active subscriptions (handles plan switching)
+    // Cancel old Stripe subscriptions and deactivate DB records
+    const { data: oldSubs } = await admin
+      .from("subscriptions")
+      .select("stripe_sub_id")
+      .eq("user_id", user.id)
+      .eq("status", "active");
+
+    if (oldSubs) {
+      for (const old of oldSubs) {
+        if (old.stripe_sub_id) {
+          try {
+            await stripe.subscriptions.cancel(old.stripe_sub_id);
+          } catch (e) {
+            console.warn("Failed to cancel old Stripe subscription:", old.stripe_sub_id, e);
+          }
+        }
+      }
+    }
+
     await admin
       .from("subscriptions")
       .update({ status: "cancelled" })
       .eq("user_id", user.id)
       .eq("status", "active");
 
-    // Provision the new subscription
     if (session.mode === "subscription" && session.subscription) {
       const subId =
         typeof session.subscription === "string"
@@ -85,12 +104,12 @@ export async function POST(request: Request) {
         current_period_end: new Date(
           sub.current_period_end * 1000
         ).toISOString(),
+        stripe_checkout_session_id: sessionId,
         stripe_customer_id:
           typeof sub.customer === "string" ? sub.customer : sub.customer.id,
         stripe_sub_id: sub.id,
       });
     } else if (session.mode === "payment") {
-      // Day pass: 24h expiry
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + 24);
 
@@ -99,6 +118,7 @@ export async function POST(request: Request) {
         plan_slug: planSlug,
         status: "active",
         current_period_end: expiresAt.toISOString(),
+        stripe_checkout_session_id: sessionId,
         stripe_customer_id:
           typeof session.customer === "string"
             ? session.customer

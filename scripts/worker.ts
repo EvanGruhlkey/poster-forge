@@ -13,7 +13,12 @@ const PYTHON_EXECUTABLE = process.env.PYTHON_EXECUTABLE || "python";
 const POSTER_CLI_PATH =
   process.env.POSTER_CLI_PATH || "./create_map_poster.py";
 const POLL_INTERVAL_MS = 5000;
+const PYTHON_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const STUCK_JOB_CHECK_INTERVAL = 12; // check every 12 polls (~60s)
 const TMP_DIR = path.resolve("tmp");
+
+let shuttingDown = false;
+let currentJobId: string | null = null;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   console.error(
@@ -26,13 +31,6 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-const STYLE_TO_THEME: Record<string, string> = {
-  classic: "warm_beige",
-  modern: "blueprint",
-  night: "midnight_blue",
-  blueprint: "blueprint",
-  noir: "noir",
-};
 
 const SIZES = [
   { key: "png_24x36", width: 12, height: 18 },
@@ -74,14 +72,12 @@ function runPythonCli(
   height: number
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const theme = STYLE_TO_THEME[config.style_id] || "warm_beige";
+    const theme = config.style_id || "warm_beige";
 
     const args = [
       POSTER_CLI_PATH,
       "--city",
       config.city,
-      "--country",
-      config.country,
       "--latitude",
       String(config.lat),
       "--longitude",
@@ -97,6 +93,10 @@ function runPythonCli(
       "--format",
       format,
     ];
+
+    if (config.country) {
+      args.push("--country", config.country);
+    }
 
     if (config.title && config.title !== config.city) {
       args.push("--display-city", config.title);
@@ -120,6 +120,13 @@ function runPythonCli(
 
     let stdout = "";
     let stderr = "";
+    let killed = false;
+
+    const timeout = setTimeout(() => {
+      killed = true;
+      proc.kill("SIGKILL");
+      reject(new Error(`Python process timed out after ${PYTHON_TIMEOUT_MS / 1000}s`));
+    }, PYTHON_TIMEOUT_MS);
 
     proc.stdout.on("data", (d) => {
       stdout += d.toString();
@@ -129,6 +136,9 @@ function runPythonCli(
     });
 
     proc.on("close", (code) => {
+      clearTimeout(timeout);
+      if (killed) return;
+
       if (code !== 0) {
         console.error(`  Python exited with code ${code}`);
         console.error(`  stderr: ${stderr.substring(0, 500)}`);
@@ -136,7 +146,6 @@ function runPythonCli(
         return;
       }
 
-      // Find generated file in posters/ directory
       const postersDir = path.resolve("posters");
       if (fs.existsSync(postersDir)) {
         const files = fs
@@ -160,6 +169,7 @@ function runPythonCli(
     });
 
     proc.on("error", (err) => {
+      clearTimeout(timeout);
       reject(new Error(`Failed to spawn Python: ${err.message}`));
     });
   });
@@ -188,15 +198,26 @@ async function uploadFile(
   }
 }
 
+async function recoverStuckJobs(): Promise<void> {
+  try {
+    const { data: count, error } = await supabase.rpc("recover_stuck_jobs", {
+      p_timeout_minutes: 10,
+    });
+    if (error) {
+      console.error("Stuck job recovery error:", error.message);
+    } else if (count > 0) {
+      console.log(`  Recovered ${count} stuck job(s)`);
+    }
+  } catch (err) {
+    console.error("Stuck job recovery failed:", err);
+  }
+}
+
 async function processJob(jobId: string): Promise<void> {
+  currentJobId = jobId;
   console.log(`\nProcessing job ${jobId}...`);
 
-  // Mark as running
-  await supabase
-    .from("poster_jobs")
-    .update({ status: "running", updated_at: new Date().toISOString() })
-    .eq("id", jobId);
-
+  // Job is already marked 'running' by claim_next_job()
   const { data: job, error } = await supabase
     .from("poster_jobs")
     .select("*")
@@ -226,27 +247,46 @@ async function processJob(jobId: string): Promise<void> {
       await uploadFile(outputFile, storagePath);
       output.preview = storagePath;
     } else {
-      // Generate PDF
+      // Find the matching size key from config dimensions
+      const matchedSize = SIZES.find(
+        (s) => s.width === config.width && s.height === config.height
+      ) || SIZES[1]; // default to 18x24
+
+      // Generate the selected PNG size
+      const pngFile = path.join(jobDir, `${matchedSize.key}.png`);
+      await runPythonCli(config, pngFile, "png", matchedSize.width, matchedSize.height);
+      const pngPath = `${userId}/${jobId}/${matchedSize.key}.png`;
+      await uploadFile(pngFile, pngPath);
+      output[matchedSize.key] = pngPath;
+
+      // Generate PDF at standard poster dimensions (12×16) for best print quality
       const pdfFile = path.join(jobDir, "poster.pdf");
       await runPythonCli(config, pdfFile, "pdf", 12, 16);
       const pdfPath = `${userId}/${jobId}/poster.pdf`;
       await uploadFile(pdfFile, pdfPath);
       output.pdf = pdfPath;
 
-      // Generate multiple PNG sizes
-      for (const size of SIZES) {
-        const pngFile = path.join(jobDir, `${size.key}.png`);
-        await runPythonCli(config, pngFile, "png", size.width, size.height);
-        const pngPath = `${userId}/${jobId}/${size.key}.png`;
-        await uploadFile(pngFile, pngPath);
-        output[size.key] = pngPath;
+      // Generate SVG for Pro+ users
+      const { data: userSub } = await supabase
+        .from("subscriptions")
+        .select("plan_slug")
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (userSub?.plan_slug === "pro_plus") {
+        const svgFile = path.join(jobDir, "poster.svg");
+        await runPythonCli(config, svgFile, "svg", 12, 16);
+        const svgPath = `${userId}/${jobId}/poster.svg`;
+        await uploadFile(svgFile, svgPath);
+        output.svg = svgPath;
       }
 
-      // Generate preview for library
-      const previewFile = path.join(jobDir, "preview.png");
-      await runPythonCli(config, previewFile, "png", 4, 5.3);
+      // Use the PNG as the preview (scaled down) instead of a separate render
       const previewPath = `${userId}/${jobId}/preview.png`;
-      await uploadFile(previewFile, previewPath);
+      await uploadFile(pngFile, previewPath);
       output.preview = previewPath;
 
       // Create poster record
@@ -261,7 +301,7 @@ async function processJob(jobId: string): Promise<void> {
         storage_paths: output,
       });
 
-      // Increment usage
+      // Atomic usage increment (safe under concurrency)
       const periodStart = new Date();
       periodStart.setDate(1);
       periodStart.setHours(0, 0, 0, 0);
@@ -271,26 +311,11 @@ async function processJob(jobId: string): Promise<void> {
         0
       );
 
-      const { data: existing } = await supabase
-        .from("usage")
-        .select("id, posters_generated")
-        .eq("user_id", userId)
-        .eq("period_start", periodStart.toISOString().split("T")[0])
-        .single();
-
-      if (existing) {
-        await supabase
-          .from("usage")
-          .update({ posters_generated: existing.posters_generated + 1 })
-          .eq("id", existing.id);
-      } else {
-        await supabase.from("usage").insert({
-          user_id: userId,
-          period_start: periodStart.toISOString().split("T")[0],
-          period_end: periodEnd.toISOString().split("T")[0],
-          posters_generated: 1,
-        });
-      }
+      await supabase.rpc("increment_usage", {
+        p_user_id: userId,
+        p_period_start: periodStart.toISOString().split("T")[0],
+        p_period_end: periodEnd.toISOString().split("T")[0],
+      });
     }
 
     // Mark done
@@ -303,7 +328,7 @@ async function processJob(jobId: string): Promise<void> {
       })
       .eq("id", jobId);
 
-    console.log(`  Job ${jobId} completed successfully!`);
+    console.log(`  Job ${jobId} completed successfully`);
   } catch (err) {
     const errorMessage =
       err instanceof Error ? err.message : "Unknown error occurred";
@@ -318,7 +343,7 @@ async function processJob(jobId: string): Promise<void> {
       })
       .eq("id", jobId);
   } finally {
-    // Cleanup tmp files
+    currentJobId = null;
     try {
       fs.rmSync(jobDir, { recursive: true, force: true });
     } catch {
@@ -328,22 +353,39 @@ async function processJob(jobId: string): Promise<void> {
 }
 
 async function pollForJobs() {
-  const { data: jobs, error } = await supabase
-    .from("poster_jobs")
-    .select("id")
-    .eq("status", "queued")
-    .order("created_at", { ascending: true })
-    .limit(1);
+  // Atomic claim: uses FOR UPDATE SKIP LOCKED so multiple worker
+  // instances never grab the same job.
+  const { data: jobId, error } = await supabase.rpc("claim_next_job");
 
   if (error) {
-    console.error("Poll error:", error.message);
+    console.error("Claim error:", error.message);
     return;
   }
 
-  if (jobs && jobs.length > 0) {
-    await processJob(jobs[0].id);
+  if (jobId) {
+    await processJob(jobId);
   }
 }
+
+async function shutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`\n${signal} received — shutting down gracefully...`);
+
+  if (currentJobId) {
+    console.log(`  Waiting for job ${currentJobId} to finish...`);
+    const waitStart = Date.now();
+    while (currentJobId && Date.now() - waitStart < PYTHON_TIMEOUT_MS + 10_000) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
+
+  console.log("Worker stopped");
+  process.exit(0);
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 async function main() {
   console.log("Poster Armory Worker started");
@@ -351,14 +393,22 @@ async function main() {
   console.log(`  Python: ${PYTHON_EXECUTABLE}`);
   console.log(`  CLI: ${POSTER_CLI_PATH}`);
   console.log(`  Polling every ${POLL_INTERVAL_MS}ms`);
+  console.log(`  Python timeout: ${PYTHON_TIMEOUT_MS / 1000}s`);
   console.log("");
 
   ensureTmpDir();
 
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  let pollCount = 0;
+
+  while (!shuttingDown) {
     try {
       await pollForJobs();
+
+      // Periodically recover stuck jobs
+      pollCount++;
+      if (pollCount % STUCK_JOB_CHECK_INTERVAL === 0) {
+        await recoverStuckJobs();
+      }
     } catch (err) {
       console.error("Worker loop error:", err);
     }

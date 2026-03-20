@@ -109,38 +109,25 @@ export interface Usage {
 
 export const STYLE_PRESETS: Record<
   string,
-  { name: string; theme: string; bgColor: string; textColor: string }
+  { name: string; bgColor: string; textColor: string }
 > = {
-  classic: {
-    name: "Classic",
-    theme: "warm_beige",
-    bgColor: "#F5F0E8",
-    textColor: "#6B5B4F",
-  },
-  modern: {
-    name: "Modern",
-    theme: "blueprint",
-    bgColor: "#1A3A5C",
-    textColor: "#E8F4FF",
-  },
-  night: {
-    name: "Night",
-    theme: "midnight_blue",
-    bgColor: "#0A1628",
-    textColor: "#D4AF37",
-  },
-  blueprint: {
-    name: "Blueprint",
-    theme: "blueprint",
-    bgColor: "#1A3A5C",
-    textColor: "#E8F4FF",
-  },
-  noir: {
-    name: "Noir",
-    theme: "noir",
-    bgColor: "#0A0A0A",
-    textColor: "#FFFFFF",
-  },
+  warm_beige: { name: "Classic", bgColor: "#F5F0E8", textColor: "#6B5B4F" },
+  terracotta: { name: "Terracotta", bgColor: "#F5EDE4", textColor: "#8B4513" },
+  noir: { name: "Noir", bgColor: "#000000", textColor: "#FFFFFF" },
+  blueprint: { name: "Blueprint", bgColor: "#1A3A5C", textColor: "#E8F4FF" },
+  midnight_blue: { name: "Night", bgColor: "#0A1628", textColor: "#D4AF37" },
+  ocean: { name: "Ocean", bgColor: "#F0F8FA", textColor: "#1A5F7A" },
+  forest: { name: "Forest", bgColor: "#F0F4F0", textColor: "#2D4A3E" },
+  sunset: { name: "Sunset", bgColor: "#FDF5F0", textColor: "#C45C3E" },
+  autumn: { name: "Autumn", bgColor: "#FBF7F0", textColor: "#8B4513" },
+  emerald: { name: "Emerald", bgColor: "#062C22", textColor: "#E3F9F1" },
+  copper_patina: { name: "Copper Patina", bgColor: "#E8F0F0", textColor: "#2A5A5A" },
+  japanese_ink: { name: "Japanese Ink", bgColor: "#FAF8F5", textColor: "#2C2C2C" },
+  pastel_dream: { name: "Pastel Dream", bgColor: "#FAF7F2", textColor: "#5D5A6D" },
+  monochrome_blue: { name: "Mono Blue", bgColor: "#F5F8FA", textColor: "#1A3A5C" },
+  neon_cyberpunk: { name: "Cyberpunk", bgColor: "#0D0D1A", textColor: "#00FFFF" },
+  contrast_zones: { name: "Contrast", bgColor: "#111111", textColor: "#F0F0F0" },
+  gradient_roads: { name: "Gradient", bgColor: "#FAF8F5", textColor: "#2C2C2C" },
 };
 
 export const POSTER_SIZES = [
@@ -152,7 +139,7 @@ export const POSTER_SIZES = [
 ] as const;
 
 export const DEFAULT_CONFIG: PosterConfig = {
-  style_id: "classic",
+  style_id: "warm_beige",
   city: "",
   country: "",
   lat: 0,

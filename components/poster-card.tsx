@@ -7,7 +7,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { MapPin, Clock, CheckCircle, XCircle, Loader2 } from "lucide-react";
-import type { Poster, PosterJob, JobStatus } from "@/lib/types";
+import { type Poster, type PosterJob, type JobStatus, STYLE_PRESETS } from "@/lib/types";
 import { ProtectedImage } from "@/components/protected-image";
 
 const STATUS_CONFIG: Record<
@@ -48,27 +48,23 @@ export function PosterCard({ poster, job }: PosterCardProps) {
   const subtitle = poster?.location_text || `${(job?.input as { city?: string })?.city}, ${(job?.input as { country?: string })?.country}`;
   const href = poster ? `/download/${poster.job_id}` : job ? `/download/${job.id}` : "#";
   const previewUrl = poster?.preview_url;
-  const styleId = poster?.config?.style_id || (job?.input as { style_id?: string })?.style_id || "classic";
-
-  const bgColors: Record<string, string> = {
-    classic: "bg-[#F5F0E8]",
-    modern: "bg-[#1A3A5C]",
-    night: "bg-[#0A1628]",
-    blueprint: "bg-[#1A3A5C]",
-    noir: "bg-[#0A0A0A]",
-  };
+  const styleId = poster?.config?.style_id || (job?.input as { style_id?: string })?.style_id || "warm_beige";
+  const style = STYLE_PRESETS[styleId] || STYLE_PRESETS.warm_beige;
 
   return (
     <Link href={href}>
       <Card className="group overflow-hidden transition-shadow hover:shadow-md">
         <div
-          className={`relative aspect-[3/4] ${bgColors[styleId] || "bg-muted"} flex items-center justify-center`}
+          className="relative aspect-[3/4] flex items-center justify-center"
+          style={{ backgroundColor: style.bgColor }}
         >
           {previewUrl ? (
             <ProtectedImage
               src={previewUrl}
               alt={title}
               className="h-full w-full object-cover"
+              bgColor={style.bgColor}
+              textColor={style.textColor}
             />
           ) : (
             <MapPin className="h-12 w-12 text-muted-foreground/30" />

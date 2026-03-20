@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { applyRateLimit } from "@/lib/rate-limit";
 import type { PosterJobOutput } from "@/lib/types";
 
 export async function GET(
@@ -17,14 +18,41 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: job, error } = await supabase
+    const limited = applyRateLimit(user.id, "job-status", { windowMs: 60_000, max: 60 });
+    if (limited) return limited;
+
+    // Try own job first; else allow if user has a poster record (cached dedup)
+    let job: { id: string; status: string; output: unknown; error: string | null; created_at: string } | null = null;
+    const { data: ownJob } = await supabase
       .from("poster_jobs")
-      .select("*")
+      .select("id, status, output, error, created_at")
       .eq("id", params.id)
       .eq("user_id", user.id)
       .single();
 
-    if (error || !job) {
+    if (ownJob) {
+      job = ownJob;
+    } else {
+      const admin = createAdminClient();
+      const { data: posterLink } = await admin
+        .from("posters")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("job_id", params.id)
+        .limit(1)
+        .single();
+
+      if (posterLink) {
+        const { data: linkedJob, error: linkedError } = await admin
+          .from("poster_jobs")
+          .select("id, status, output, error, created_at")
+          .eq("id", params.id)
+          .single();
+        if (!linkedError && linkedJob) job = linkedJob;
+      }
+    }
+
+    if (!job) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 

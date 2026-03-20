@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MapPin } from "lucide-react";
+import { Logo } from "@/components/logo";
 
 export function Footer() {
   return (
@@ -10,7 +10,7 @@ export function Footer() {
             href="/"
             className="flex items-center gap-2 text-sm font-semibold text-muted-foreground"
           >
-            <MapPin className="h-4 w-4" />
+            <Logo className="h-5 w-5" />
             Poster Armory
           </Link>
           <p className="text-xs text-muted-foreground">
@@ -22,6 +22,18 @@ export function Footer() {
               className="text-xs text-muted-foreground hover:text-foreground"
             >
               Pricing
+            </Link>
+            <Link
+              href="/terms"
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Terms
+            </Link>
+            <Link
+              href="/privacy"
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Privacy
             </Link>
             <Link
               href="/login"

@@ -15,7 +15,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, MapPin, LogIn } from "lucide-react";
+import { Loader2, LogIn } from "lucide-react";
+import { Logo } from "@/components/logo";
 import { toast } from "sonner";
 
 export default function LoginPage() {
@@ -35,10 +36,15 @@ export default function LoginPage() {
 function LoginContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/app";
+  const rawRedirect = searchParams.get("redirect") || "/app";
+  const redirect =
+    rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") && !rawRedirect.includes("://")
+      ? rawRedirect
+      : "/app";
 
   const supabase = createClient();
   const errorParam = searchParams.get("error");
@@ -54,6 +60,12 @@ function LoginContent() {
     setLoading(true);
 
     if (isSignUp) {
+      if (password !== confirmPassword) {
+        setLoading(false);
+        toast.error("Passwords do not match.");
+        return;
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -100,7 +112,7 @@ function LoginContent() {
         href="/"
         className="mb-8 flex items-center gap-2 text-2xl font-bold text-foreground"
       >
-        <MapPin className="h-7 w-7" />
+        <Logo className="h-8 w-8" />
         Poster Armory
       </Link>
 
@@ -172,6 +184,20 @@ function LoginContent() {
                 minLength={6}
               />
             </div>
+            {isSignUp && (
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="Confirm your password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+              </div>
+            )}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -186,7 +212,7 @@ function LoginContent() {
             {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
             <button
               type="button"
-              onClick={() => setIsSignUp(!isSignUp)}
+              onClick={() => { setIsSignUp(!isSignUp); setConfirmPassword(""); }}
               className="font-medium text-foreground underline underline-offset-4 hover:text-primary"
             >
               {isSignUp ? "Sign in" : "Sign up"}
@@ -196,7 +222,15 @@ function LoginContent() {
       </Card>
 
       <p className="mt-6 text-sm text-muted-foreground">
-        By signing in, you agree to our Terms of Service.
+        By signing in, you agree to our{" "}
+        <Link href="/terms" className="underline hover:text-foreground">
+          Terms of Service
+        </Link>{" "}
+        and{" "}
+        <Link href="/privacy" className="underline hover:text-foreground">
+          Privacy Policy
+        </Link>
+        .
       </p>
     </div>
   );

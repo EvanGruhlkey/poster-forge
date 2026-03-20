@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
-import Link from "next/link";
+import { useEffect, useState, useCallback, useRef, Suspense } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { ProtectedImage } from "@/components/protected-image";
 import { Navbar } from "@/components/navbar";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,7 +29,6 @@ import {
   getPlanTier,
   isFormatAllowed,
   PLAN_ENTITLEMENTS,
-  fileKeyToFormat,
 } from "@/lib/plan-config";
 
 interface JobStatusResponse {
@@ -40,11 +39,39 @@ interface JobStatusResponse {
   downloadUrls: Record<string, string> | null;
 }
 
-export default function DownloadPage() {
+const PROGRESS_STAGES = [
+  { threshold: 0, label: "Waiting for available worker..." },
+  { threshold: 10, label: "Job picked up, initializing..." },
+  { threshold: 20, label: "Fetching map data from OpenStreetMap..." },
+  { threshold: 40, label: "Processing roads and features..." },
+  { threshold: 55, label: "Rendering map layers..." },
+  { threshold: 70, label: "Applying theme and styling..." },
+  { threshold: 82, label: "Generating print-ready files..." },
+  { threshold: 92, label: "Uploading files..." },
+];
+
+function getStageLabel(progress: number): string {
+  let label = PROGRESS_STAGES[0].label;
+  for (const stage of PROGRESS_STAGES) {
+    if (progress >= stage.threshold) label = stage.label;
+  }
+  return label;
+}
+
+function DownloadPageInner() {
   const { jobId } = useParams<{ jobId: string }>();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const cachedPreview = searchParams.get("preview");
+  const bgColor = searchParams.get("bg") || undefined;
+  const textColor = searchParams.get("tc") || undefined;
   const [job, setJob] = useState<JobStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [planTier, setPlanTier] = useState<PlanTier>("none");
+  const [progress, setProgress] = useState(0);
+  const startTime = useRef(Date.now());
+  const animFrame = useRef<number | null>(null);
+
   const triggerDownload = useCallback(
     (fileKey: string) => {
       const link = document.createElement("a");
@@ -61,7 +88,11 @@ export default function DownloadPage() {
   useEffect(() => {
     fetch("/api/subscription")
       .then((r) => r.json())
-      .then((d) => setPlanTier(getPlanTier(d.plan?.slug)))
+      .then((d) => {
+        if (d.active && d.subscription?.plan_slug) {
+          setPlanTier(getPlanTier(d.subscription.plan_slug));
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -69,8 +100,21 @@ export default function DownloadPage() {
     if (!jobId) return;
 
     let interval: NodeJS.Timeout;
+    let pollCount = 0;
+    const MAX_POLLS = 200; // ~10 minutes at 3s intervals
 
     async function fetchStatus() {
+      pollCount++;
+      if (pollCount > MAX_POLLS) {
+        clearInterval(interval);
+        setJob((prev) =>
+          prev
+            ? { ...prev, status: "failed", error: "Job timed out. Please try again." }
+            : { id: jobId, status: "failed", output: null, error: "Job timed out. Please try again.", downloadUrls: null }
+        );
+        setLoading(false);
+        return;
+      }
       try {
         const res = await fetch(`/api/jobs/${jobId}`);
         if (!res.ok) return;
@@ -78,7 +122,10 @@ export default function DownloadPage() {
         setJob(data);
         setLoading(false);
 
-        if (data.status === "done" || data.status === "failed") {
+        if (data.status === "done") {
+          setProgress(100);
+          clearInterval(interval);
+        } else if (data.status === "failed") {
           clearInterval(interval);
         }
       } catch {
@@ -92,6 +139,40 @@ export default function DownloadPage() {
     return () => clearInterval(interval);
   }, [jobId]);
 
+  // Smooth progress animation based on elapsed time
+  useEffect(() => {
+    const status = job?.status;
+    if (status === "done" || status === "failed") {
+      if (animFrame.current) cancelAnimationFrame(animFrame.current);
+      return;
+    }
+
+    function tick() {
+      const elapsed = (Date.now() - startTime.current) / 1000;
+      let target: number;
+
+      if (!job || job.status === "queued") {
+        // 0-10% over first 5 seconds
+        target = Math.min(10, elapsed * 2);
+      } else {
+        // running: asymptotically approach 95% (never reaches it until done)
+        target = 10 + 85 * (1 - Math.exp(-elapsed / 60));
+      }
+
+      setProgress((prev) => {
+        if (prev >= 100) return 100;
+        return Math.max(prev, Math.round(target));
+      });
+
+      animFrame.current = requestAnimationFrame(tick);
+    }
+
+    animFrame.current = requestAnimationFrame(tick);
+    return () => {
+      if (animFrame.current) cancelAnimationFrame(animFrame.current);
+    };
+  }, [job?.status, job]);
+
   const STATUS_UI = {
     queued: {
       icon: <Clock className="h-8 w-8 text-muted-foreground" />,
@@ -101,7 +182,7 @@ export default function DownloadPage() {
     running: {
       icon: <Loader2 className="h-8 w-8 animate-spin text-primary" />,
       title: "Generating...",
-      desc: "Your poster is being created. This may take a few minutes.",
+      desc: "Your poster is being created.",
     },
     done: {
       icon: <CheckCircle className="h-8 w-8 text-green-600" />,
@@ -133,13 +214,25 @@ export default function DownloadPage() {
     <div className="flex min-h-screen flex-col">
       <Navbar />
       <div className="mx-auto max-w-2xl flex-1 px-4 py-12 sm:px-6">
-        <Link
-          href="/app/library"
+        <button
+          onClick={() => router.back()}
           className="mb-6 inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="mr-1 h-4 w-4" />
-          Back to Library
-        </Link>
+          Back
+        </button>
+
+        {(cachedPreview || (job?.downloadUrls as Record<string, string>)?.preview) && (
+          <div className="mb-6 flex justify-center">
+            <ProtectedImage
+              src={(job?.downloadUrls as Record<string, string>)?.preview || cachedPreview!}
+              alt="Poster preview"
+              className="max-h-[400px] w-auto rounded-lg border shadow-md"
+              bgColor={bgColor}
+              textColor={textColor}
+            />
+          </div>
+        )}
 
         <Card>
           <CardHeader className="text-center">
@@ -198,49 +291,56 @@ export default function DownloadPage() {
                     );
                   })}
 
-                {(() => {
-                  const formats = PLAN_ENTITLEMENTS[planTier].formats;
-                  const primaryFormat = formats.includes("pdf") ? "pdf" : formats.includes("png") ? Object.keys(job.output).find((k) => k.startsWith("png_")) || "png_18x24" : null;
-                  if (!primaryFormat) return null;
-                  const btnLabel = formats.includes("pdf") ? "Download PDF" : "Download PNG";
-                  return (
-                    <Button
-                      className="mt-4 w-full"
-                      size="lg"
-                      onClick={() => triggerDownload(primaryFormat)}
-                    >
-                      <Download className="mr-2 h-4 w-4" />
-                      {btnLabel}
-                    </Button>
-                  );
-                })()}
               </div>
             )}
 
             {status === "failed" && (
               <div className="text-center">
                 <p className="mb-4 text-sm text-destructive">{job?.error}</p>
-                <Button asChild>
-                  <Link href="/app">Try Again</Link>
-                </Button>
+                <Button onClick={() => router.back()}>Try Again</Button>
               </div>
             )}
 
             {(status === "queued" || status === "running") && (
-              <div className="py-8 text-center">
-                <div className="mx-auto mb-4 h-2 w-48 overflow-hidden rounded-full bg-muted">
-                  <div className="h-full animate-pulse rounded-full bg-primary/60 w-1/2" />
+              <div className="py-8">
+                <div className="mx-auto max-w-sm">
+                  <div className="mb-2 flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      {getStageLabel(progress)}
+                    </span>
+                    <span className="font-medium tabular-nums">
+                      {progress}%
+                    </span>
+                  </div>
+                  <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all duration-700 ease-out"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {status === "queued"
-                    ? "Waiting for available worker..."
-                    : "Processing map data and rendering..."}
-                </p>
               </div>
             )}
           </CardContent>
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function DownloadPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen flex-col">
+          <Navbar />
+          <div className="flex flex-1 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        </div>
+      }
+    >
+      <DownloadPageInner />
+    </Suspense>
   );
 }

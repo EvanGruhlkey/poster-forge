@@ -34,8 +34,42 @@ export async function POST(request: Request) {
 
         if (!userId || !planSlug) break;
 
+        // Idempotency: skip if this checkout session was already fulfilled
+        const { data: alreadyFulfilled } = await admin
+          .from("subscriptions")
+          .select("id")
+          .eq("stripe_checkout_session_id", session.id)
+          .limit(1)
+          .single();
+
+        if (alreadyFulfilled) break;
+
+        // Cancel old Stripe subscriptions and deactivate DB records
+        const { data: oldSubs } = await admin
+          .from("subscriptions")
+          .select("stripe_sub_id")
+          .eq("user_id", userId)
+          .eq("status", "active");
+
+        if (oldSubs) {
+          for (const old of oldSubs) {
+            if (old.stripe_sub_id) {
+              try {
+                await stripe.subscriptions.cancel(old.stripe_sub_id);
+              } catch (e) {
+                console.warn("Failed to cancel old Stripe subscription:", old.stripe_sub_id, e);
+              }
+            }
+          }
+        }
+
+        await admin
+          .from("subscriptions")
+          .update({ status: "cancelled" })
+          .eq("user_id", userId)
+          .eq("status", "active");
+
         if (session.mode === "payment") {
-          // Day pass: set 24h expiry
           const expiresAt = new Date();
           expiresAt.setHours(expiresAt.getHours() + 24);
 
@@ -44,6 +78,7 @@ export async function POST(request: Request) {
             plan_slug: planSlug,
             status: "active",
             current_period_end: expiresAt.toISOString(),
+            stripe_checkout_session_id: session.id,
             stripe_customer_id:
               typeof session.customer === "string"
                 ? session.customer
@@ -66,6 +101,7 @@ export async function POST(request: Request) {
             current_period_end: new Date(
               sub.current_period_end * 1000
             ).toISOString(),
+            stripe_checkout_session_id: session.id,
             stripe_customer_id:
               typeof sub.customer === "string"
                 ? sub.customer

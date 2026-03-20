@@ -26,17 +26,45 @@ export default function PickLocationPage() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [found, setFound] = useState(false);
 
+  async function reverseGeocode(latitude: string, longitude: string) {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`,
+      { headers: { "User-Agent": "PosterArmory/1.0" } }
+    );
+    const data = await res.json();
+    if (data?.address) {
+      if (!city && (data.address.city || data.address.town || data.address.village)) {
+        setCity(data.address.city || data.address.town || data.address.village);
+      }
+      if (data.address.country) {
+        setCountry(data.address.country);
+      }
+    }
+    return data;
+  }
+
   async function handleFindLocation() {
-    if (!city && !locationText) {
+    if (!city && !locationText && !lat && !lon) {
       toast.error("Please enter a city name or location.");
       return;
     }
     setLoading(true);
 
     try {
-      const query = locationText || `${city}, ${country}`;
+      if (!city && !locationText && lat && lon) {
+        const data = await reverseGeocode(lat, lon);
+        if (data?.display_name) {
+          setFound(true);
+          toast.success(`Found: ${data.display_name}`);
+        } else {
+          toast.error("Could not identify this location.");
+        }
+        return;
+      }
+
+      const query = locationText || `${city}${country ? `, ${country}` : ""}`;
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`,
+        `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}&limit=1`,
         { headers: { "User-Agent": "PosterArmory/1.0" } }
       );
       const data = await res.json();
@@ -46,9 +74,19 @@ export default function PickLocationPage() {
         setLat(parseFloat(result.lat).toFixed(4));
         setLon(parseFloat(result.lon).toFixed(4));
 
-        if (!city && result.display_name) {
+        if (!city) {
+          const fallbackCity = result.address?.city || result.address?.town || result.address?.village;
+          if (fallbackCity) {
+            setCity(fallbackCity);
+          } else if (result.display_name) {
+            setCity(result.display_name.split(",")[0]?.trim() || "");
+          }
+        }
+
+        if (result.address?.country) {
+          setCountry(result.address.country);
+        } else if (!country && result.display_name) {
           const parts = result.display_name.split(",");
-          setCity(parts[0]?.trim() || "");
           setCountry(parts[parts.length - 1]?.trim() || "");
         }
 
@@ -64,14 +102,48 @@ export default function PickLocationPage() {
     }
   }
 
-  function handleNext() {
-    if (!city || !lat || !lon) {
+  async function handleNext() {
+    if (!lat || !lon) {
       toast.error("Please find a location first.");
       return;
     }
+
+    let finalCity = city;
+    let finalCountry = country;
+
+    if (!finalCity || !finalCountry) {
+      setLoading(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`,
+          { headers: { "User-Agent": "PosterArmory/1.0" } }
+        );
+        const data = await res.json();
+        if (data?.address) {
+          if (!finalCity) {
+            finalCity = data.address.city || data.address.town || data.address.village || "Unknown";
+          }
+          if (!finalCountry) {
+            finalCountry = data.address.country || "";
+          }
+          setCity(finalCity);
+          setCountry(finalCountry);
+        }
+      } catch {
+        // proceed with what we have
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    if (!finalCity) {
+      toast.error("Please enter a city name.");
+      return;
+    }
+
     const params = new URLSearchParams({
-      city,
-      country,
+      city: finalCity,
+      country: finalCountry,
       lat,
       lon,
     });

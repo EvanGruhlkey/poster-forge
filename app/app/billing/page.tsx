@@ -29,12 +29,14 @@ import { toast } from "sonner";
 interface SubscriptionData {
   active: boolean;
   expired?: boolean;
+  cancelAtPeriodEnd?: boolean;
   subscription: {
     id: string;
     plan_slug: string;
     status: string;
     current_period_end: string | null;
     created_at: string;
+    stripe_sub_id?: string | null;
   } | null;
   plan?: {
     name: string;
@@ -53,6 +55,7 @@ export default function BillingPage() {
   const [data, setData] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showPlans, setShowPlans] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const fulfilledRef = useRef(false);
 
   useEffect(() => {
@@ -146,10 +149,17 @@ export default function BillingPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Current Plan</CardTitle>
-              <Badge variant="default" className="gap-1 bg-green-600">
-                <CheckCircle className="h-3 w-3" />
-                Active
-              </Badge>
+              {data?.cancelAtPeriodEnd ? (
+                <Badge variant="secondary" className="gap-1 border-amber-300 bg-amber-100 text-amber-800">
+                  <Clock className="h-3 w-3" />
+                  Cancelling
+                </Badge>
+              ) : (
+                <Badge variant="default" className="gap-1 bg-green-600">
+                  <CheckCircle className="h-3 w-3" />
+                  Active
+                </Badge>
+              )}
             </div>
             <CardDescription>{plan.name}</CardDescription>
           </CardHeader>
@@ -167,13 +177,20 @@ export default function BillingPage() {
                 <div className="flex items-start gap-3">
                   <Clock className="mt-0.5 h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="text-sm font-medium">Renews</p>
+                    <p className="text-sm font-medium">
+                      {data?.cancelAtPeriodEnd ? "Expires" : "Renews"}
+                    </p>
                     <p className="text-sm text-muted-foreground">
                       {new Date(sub.current_period_end).toLocaleDateString(
                         undefined,
                         { month: "long", day: "numeric", year: "numeric" }
                       )}
                     </p>
+                    {data?.cancelAtPeriodEnd && (
+                      <p className="text-xs text-amber-600 mt-1">
+                        Cancellation scheduled
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -244,19 +261,50 @@ export default function BillingPage() {
                   className={`ml-1 h-4 w-4 transition-transform ${showPlans ? "rotate-180" : ""}`}
                 />
               </Button>
+              {!data?.cancelAtPeriodEnd && (
+                <Button
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive"
+                  disabled={cancelling}
+                  onClick={async () => {
+                    if (!confirm("Are you sure you want to cancel your subscription? You'll keep access until the end of your billing period.")) return;
+                    setCancelling(true);
+                    try {
+                      const res = await fetch("/api/stripe/cancel", { method: "POST" });
+                      const result = await res.json();
+                      if (res.ok) {
+                        toast.success("Subscription will cancel at the end of your billing period.");
+                        const subRes = await fetch("/api/subscription");
+                        if (subRes.ok) setData(await subRes.json());
+                      } else {
+                        toast.error(result.error || "Failed to cancel subscription.");
+                      }
+                    } catch {
+                      toast.error("Failed to cancel subscription.");
+                    } finally {
+                      setCancelling(false);
+                    }
+                  }}
+                >
+                  {cancelling ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  Cancel Plan
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
       )}
 
       {/* Expired Banner */}
-      {data?.expired && sub && (
+      {data?.expired && (
         <Card className="mb-8 border-amber-300 bg-amber-50">
           <CardContent className="flex items-center gap-3 py-4">
             <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" />
             <div>
               <p className="font-medium text-amber-900">
-                Your {plan?.name || "plan"} has expired
+                Your {data.plan?.name || "plan"} has expired
               </p>
               <p className="text-sm text-amber-700">
                 Choose a new plan below to continue generating posters.

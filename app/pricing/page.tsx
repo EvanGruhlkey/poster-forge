@@ -10,6 +10,7 @@ import { toast } from "sonner";
 function PricingContent() {
   const searchParams = useSearchParams();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentPlanSlug, setCurrentPlanSlug] = useState<string | null>(null);
 
   useEffect(() => {
     if (searchParams.get("checkout") === "cancelled") {
@@ -20,7 +21,11 @@ function PricingContent() {
       try {
         const res = await fetch("/api/subscription");
         if (res.ok) {
+          const data = await res.json();
           setIsLoggedIn(true);
+          if (data.active && data.subscription?.plan_slug) {
+            setCurrentPlanSlug(data.subscription.plan_slug);
+          }
         }
       } catch {
         // not logged in
@@ -29,7 +34,7 @@ function PricingContent() {
     checkAuth();
   }, [searchParams]);
 
-  return <PlanCards isLoggedIn={isLoggedIn} currentPlanSlug={null} />;
+  return <PlanCards isLoggedIn={isLoggedIn} currentPlanSlug={currentPlanSlug} />;
 }
 
 export default function PricingPage() {

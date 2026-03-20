@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { PosterJobOutput } from "@/lib/types";
 import { getPlanTier, isFormatAllowed } from "@/lib/plan-config";
+import { applyRateLimit } from "@/lib/rate-limit";
 
 export async function GET(
   _request: Request,
@@ -20,18 +21,24 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const limited = applyRateLimit(user.id, "download", { windowMs: 60_000, max: 30 });
+    if (limited) return limited;
+
     const admin = createAdminClient();
 
     const { data: sub } = await admin
       .from("subscriptions")
-      .select("plan_slug")
+      .select("plan_slug, current_period_end")
       .eq("user_id", user.id)
       .eq("status", "active")
       .order("created_at", { ascending: false })
       .limit(1)
       .single();
 
-    const planTier = getPlanTier(sub?.plan_slug);
+    const isExpired =
+      sub?.current_period_end &&
+      new Date(sub.current_period_end) < new Date();
+    const planTier = getPlanTier(isExpired ? null : sub?.plan_slug);
 
     if (!isFormatAllowed(planTier, params.fileKey)) {
       return NextResponse.json(
@@ -40,14 +47,27 @@ export async function GET(
       );
     }
 
-    const { data: job, error } = await supabase
+    // Resolve job: user may own the job or have a poster record (cached dedup)
+    const { data: job, error: jobError } = await admin
       .from("poster_jobs")
-      .select("*")
+      .select("id, user_id, status, output")
       .eq("id", params.jobId)
-      .eq("user_id", user.id)
       .single();
 
-    if (error || !job || job.status !== "done" || !job.output) {
+    if (jobError || !job || job.status !== "done" || !job.output) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const isOwner = job.user_id === user.id;
+    const { data: posterLink } = await admin
+      .from("posters")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("job_id", params.jobId)
+      .limit(1)
+      .single();
+
+    if (!isOwner && !posterLink) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 

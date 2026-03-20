@@ -1,15 +1,22 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Button } from "@/components/ui/button";
 import { PosterCard } from "@/components/poster-card";
-import { MapPin, Plus, Crown } from "lucide-react";
+import { MapPin, Plus, Crown, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Poster, PosterJob } from "@/lib/types";
 
-export default async function LibraryPage() {
+const PAGE_SIZE = 20;
+const THUMBNAIL_WIDTH = 400;
+const THUMBNAIL_EXPIRY = 3600;
+
+export default async function LibraryPage({
+  searchParams,
+}: {
+  searchParams: { page?: string };
+}) {
   const supabase = createClient();
 
   const {
@@ -52,24 +59,37 @@ export default async function LibraryPage() {
     );
   }
 
-  const [postersResult, jobsResult] = await Promise.all([
+  const page = Math.max(1, parseInt(searchParams.page || "1", 10) || 1);
+  const from = (page - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
+
+  const [postersResult, countResult, jobsResult] = await Promise.all([
     supabase
       .from("posters")
       .select("*")
       .eq("user_id", user.id)
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .range(from, to),
     supabase
-      .from("poster_jobs")
-      .select("*")
-      .eq("user_id", user.id)
-      .in("status", ["queued", "running"])
-      .order("created_at", { ascending: false }),
+      .from("posters")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id),
+    page === 1
+      ? supabase
+          .from("poster_jobs")
+          .select("*")
+          .eq("user_id", user.id)
+          .in("status", ["queued", "running"])
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] }),
   ]);
 
   const posters = (postersResult.data as Poster[]) || [];
-  const activeJobs = (jobsResult.data as PosterJob[]) || [];
+  const totalPosters = countResult.count || 0;
+  const totalPages = Math.max(1, Math.ceil(totalPosters / PAGE_SIZE));
+  const activeJobs = (page === 1 ? (jobsResult.data as PosterJob[]) : []) || [];
 
-  // Generate signed preview URLs for each poster
+  // Generate signed preview URLs with smaller thumbnail transforms
   const postersWithPreviews = await Promise.all(
     posters.map(async (poster) => {
       const previewPath = poster.storage_paths?.preview;
@@ -77,7 +97,9 @@ export default async function LibraryPage() {
 
       const { data } = await admin.storage
         .from("posters")
-        .createSignedUrl(previewPath, 3600);
+        .createSignedUrl(previewPath, THUMBNAIL_EXPIRY, {
+          transform: { width: THUMBNAIL_WIDTH, resize: "contain" },
+        });
 
       return {
         ...poster,
@@ -92,7 +114,7 @@ export default async function LibraryPage() {
         <div>
           <h1 className="text-3xl font-bold">My Library</h1>
           <p className="mt-1 text-muted-foreground">
-            {posters.length} poster{posters.length !== 1 ? "s" : ""} created
+            {totalPosters} poster{totalPosters !== 1 ? "s" : ""} created
           </p>
         </div>
         <Button asChild>
@@ -115,11 +137,43 @@ export default async function LibraryPage() {
       )}
 
       {postersWithPreviews.length > 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {postersWithPreviews.map((poster) => (
-            <PosterCard key={poster.id} poster={poster} />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {postersWithPreviews.map((poster) => (
+              <PosterCard key={poster.id} poster={poster} />
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="mt-8 flex items-center justify-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className={page <= 1 ? "pointer-events-none opacity-50" : ""}
+              >
+                <Link href={`/app/library?page=${page - 1}`}>
+                  <ChevronLeft className="mr-1 h-4 w-4" />
+                  Previous
+                </Link>
+              </Button>
+              <span className="px-3 text-sm text-muted-foreground">
+                Page {page} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className={page >= totalPages ? "pointer-events-none opacity-50" : ""}
+              >
+                <Link href={`/app/library?page=${page + 1}`}>
+                  Next
+                  <ChevronRight className="ml-1 h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          )}
+        </>
       ) : (
         <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed py-20">
           <MapPin className="mb-4 h-12 w-12 text-muted-foreground/30" />

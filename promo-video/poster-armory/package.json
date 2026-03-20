@@ -1,0 +1,25 @@
+{
+  "name": "poster-armory-promo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts PromoVideo out/promo.mp4 --image-format png --crf 1",
+    "render:preview": "remotion render src/index.ts PromoVideo out/promo-preview.mp4",
+    "render:demo": "remotion render src/index.ts DemoVideo out/demo.mp4 --image-format png --crf 1",
+    "render:demo:preview": "remotion render src/index.ts DemoVideo out/demo-preview.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.232",
+    "@remotion/transitions": "4.0.232",
+    "lucide-react": "^0.460.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "remotion": "4.0.232"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.5.0"
+  }
+}

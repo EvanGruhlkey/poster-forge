@@ -56,8 +56,12 @@ export const PLAN_ENTITLEMENTS: Record<PlanTier, PlanEntitlements> = {
   },
 };
 
-export const STANDARD_THEMES = ["classic", "modern", "noir"];
-export const PREMIUM_THEMES = ["night", "blueprint"];
+export const STANDARD_THEMES = ["warm_beige", "terracotta", "noir", "blueprint", "ocean"];
+export const PREMIUM_THEMES = [
+  "midnight_blue", "forest", "sunset", "autumn", "emerald",
+  "copper_patina", "japanese_ink", "pastel_dream", "monochrome_blue",
+  "neon_cyberpunk", "contrast_zones", "gradient_roads",
+];
 
 export const DEFAULT_SIZE = { label: '18"x24"', width: 9, height: 12, key: "png_18x24" };
 

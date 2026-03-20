@@ -1,15 +1,15 @@
 {
   "name": "Gradient Roads",
-  "description": "Smooth gradient from dark center to light edges with subtle features",
-  "bg": "#FFFFFF",
-  "text": "#000000",
-  "gradient_color": "#FFFFFF",
-  "water": "#D5D5D5",
-  "parks": "#EFEFEF",
-  "road_motorway": "#050505",
-  "road_primary": "#151515",
-  "road_secondary": "#2A2A2A",
-  "road_tertiary": "#404040",
-  "road_residential": "#555555",
-  "road_default": "#404040"
+  "description": "Warm-to-cool road hierarchy on a soft neutral background",
+  "bg": "#FAF8F5",
+  "text": "#2C2C2C",
+  "gradient_color": "#FAF8F5",
+  "water": "#D6E4EC",
+  "parks": "#E8EDE4",
+  "road_motorway": "#C44A2F",
+  "road_primary": "#D4763A",
+  "road_secondary": "#8C7B6B",
+  "road_tertiary": "#5E7A8A",
+  "road_residential": "#7A9CAD",
+  "road_default": "#5E7A8A"
 }

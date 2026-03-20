@@ -7,6 +7,8 @@ interface ProtectedImageProps {
   alt: string;
   className?: string;
   watermark?: boolean;
+  bgColor?: string;
+  textColor?: string;
 }
 
 export function ProtectedImage({
@@ -14,6 +16,8 @@ export function ProtectedImage({
   alt,
   className,
   watermark = true,
+  bgColor,
+  textColor,
 }: ProtectedImageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [blurred, setBlurred] = useState(false);
@@ -46,6 +50,8 @@ export function ProtectedImage({
     };
   }, []);
 
+  const wmColor = textColor || "currentColor";
+
   return (
     <div
       ref={containerRef}
@@ -66,16 +72,42 @@ export function ProtectedImage({
         }}
       />
 
+      {bgColor && (
+        <>
+          <div
+            className="absolute inset-x-0 top-0 z-[5] h-[18%]"
+            style={{
+              background: `linear-gradient(to bottom, ${bgColor}, transparent)`,
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            className="absolute inset-x-0 bottom-0 z-[5] h-[18%]"
+            style={{
+              background: `linear-gradient(to top, ${bgColor}, transparent)`,
+              pointerEvents: "none",
+            }}
+          />
+        </>
+      )}
+
       {watermark && (
         <div
-          className="absolute inset-0 z-10 flex items-center justify-center overflow-hidden"
+          className="absolute inset-0 z-10 overflow-hidden"
           style={{ pointerEvents: "none" }}
         >
-          <div className="absolute inset-0 flex flex-wrap items-center justify-center gap-12 -rotate-[30deg] scale-150 opacity-[0.06]">
-            {Array.from({ length: 20 }).map((_, i) => (
+          <div
+            className="absolute -inset-[50%] flex flex-wrap items-center justify-center gap-x-10 gap-y-6"
+            style={{
+              transform: "rotate(-35deg)",
+              opacity: 0.12,
+            }}
+          >
+            {Array.from({ length: 48 }).map((_, i) => (
               <span
                 key={i}
-                className="whitespace-nowrap text-sm font-bold tracking-widest text-foreground"
+                className="whitespace-nowrap text-base font-extrabold tracking-[0.2em]"
+                style={{ color: wmColor }}
               >
                 POSTER ARMORY
               </span>

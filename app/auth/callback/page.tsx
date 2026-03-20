@@ -15,7 +15,11 @@ function CallbackHandler() {
     handled.current = true;
 
     const code = searchParams.get("code");
-    const next = searchParams.get("next") || "/app";
+    const rawNext = searchParams.get("next") || "/app";
+    const next =
+      rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.includes("://")
+        ? rawNext
+        : "/app";
 
     if (!code) {
       router.replace("/login?error=no_code");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,7 +54,7 @@ export default function CustomizePosterPage() {
     title: city,
     subtitle: "",
     date_line: "",
-    style_id: "classic",
+    style_id: "warm_beige",
     distance: 10000,
     show_labels: true,
     show_water: true,
@@ -65,6 +65,13 @@ export default function CustomizePosterPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [generateLoading, setGenerateLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     async function loadPlan() {
@@ -93,6 +100,11 @@ export default function CustomizePosterPage() {
   );
 
   async function handleGeneratePreview() {
+    if (!config.city) {
+      toast.error("Please go back and pick a location first.");
+      return;
+    }
+    if (pollRef.current) clearInterval(pollRef.current);
     setPreviewLoading(true);
     try {
       const submitConfig = {
@@ -116,22 +128,37 @@ export default function CustomizePosterPage() {
           setPreviewLoading(false);
           return;
         }
-        throw new Error(err.error || "Failed to create preview job");
+        const msg = err.error || "Failed to create preview job";
+        if (err.details?.fieldErrors) {
+          const fields = Object.entries(err.details.fieldErrors)
+            .map(([k, v]) => `${k}: ${(v as string[]).join(", ")}`)
+            .join("; ");
+          throw new Error(`${msg} (${fields})`);
+        }
+        throw new Error(msg);
       }
 
       const { jobId } = await res.json();
       toast.success("Preview generation started!");
 
-      const poll = setInterval(async () => {
-        const status = await fetch(`/api/jobs/${jobId}`).then((r) => r.json());
-        if (status.status === "done") {
-          clearInterval(poll);
-          setPreviewUrl(status.downloadUrls?.preview || null);
-          setPreviewLoading(false);
-        } else if (status.status === "failed") {
-          clearInterval(poll);
-          toast.error(status.error || "Preview generation failed");
-          setPreviewLoading(false);
+      pollRef.current = setInterval(async () => {
+        try {
+          const r = await fetch(`/api/jobs/${jobId}`);
+          if (!r.ok) return;
+          const status = await r.json();
+          if (status.status === "done") {
+            if (pollRef.current) clearInterval(pollRef.current);
+            pollRef.current = null;
+            setPreviewUrl(status.downloadUrls?.preview || null);
+            setPreviewLoading(false);
+          } else if (status.status === "failed") {
+            if (pollRef.current) clearInterval(pollRef.current);
+            pollRef.current = null;
+            toast.error(status.error || "Preview generation failed");
+            setPreviewLoading(false);
+          }
+        } catch {
+          // network blip, keep polling
         }
       }, 3000);
     } catch (err: unknown) {
@@ -142,6 +169,10 @@ export default function CustomizePosterPage() {
   }
 
   async function handleDownloadPoster() {
+    if (!config.city) {
+      toast.error("Please go back and pick a location first.");
+      return;
+    }
     setGenerateLoading(true);
     try {
       const submitConfig = {
@@ -170,7 +201,12 @@ export default function CustomizePosterPage() {
 
       const { jobId } = await res.json();
       toast.success("Poster generation started! Redirecting to download page...");
-      router.push(`/download/${jobId}`);
+      const params = new URLSearchParams();
+      if (previewUrl) params.set("preview", previewUrl);
+      params.set("bg", currentStyle.bgColor);
+      params.set("tc", currentStyle.textColor);
+      const qs = params.toString();
+      router.push(`/download/${jobId}${qs ? `?${qs}` : ""}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       toast.error(msg);
@@ -178,7 +214,7 @@ export default function CustomizePosterPage() {
     }
   }
 
-  const currentStyle = STYLE_PRESETS[config.style_id] || STYLE_PRESETS.classic;
+  const currentStyle = STYLE_PRESETS[config.style_id] || STYLE_PRESETS.warm_beige;
 
   function UpgradeBadge() {
     return (
@@ -241,6 +277,7 @@ export default function CustomizePosterPage() {
                           return;
                         }
                         updateConfig({ style_id: id });
+                        setPreviewUrl(null);
                       }}
                       className={`relative rounded-lg border-2 p-3 text-center transition-all ${
                         config.style_id === id
@@ -295,23 +332,6 @@ export default function CustomizePosterPage() {
                 )}
               </div>
 
-              <Separator />
-
-              <div className="space-y-3">
-                {[
-                  { key: "show_labels" as const, label: "Labels" },
-                  { key: "show_water" as const, label: "Water" },
-                  { key: "show_parks" as const, label: "Parks" },
-                ].map(({ key, label }) => (
-                  <div key={key} className="flex items-center justify-between">
-                    <Label>{label}</Label>
-                    <Switch
-                      checked={config[key]}
-                      onCheckedChange={(v) => updateConfig({ [key]: v })}
-                    />
-                  </div>
-                ))}
-              </div>
             </CardContent>
           </Card>
 
@@ -443,6 +463,8 @@ export default function CustomizePosterPage() {
                   src={previewUrl}
                   alt="Poster preview"
                   className="h-full w-full object-contain"
+                  bgColor={currentStyle.bgColor}
+                  textColor={currentStyle.textColor}
                 />
               ) : previewLoading ? (
                 <div className="text-center">

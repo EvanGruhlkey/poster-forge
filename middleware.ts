@@ -33,20 +33,20 @@ export async function middleware(request: NextRequest) {
   );
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const isProtected = PROTECTED_PATHS.some((path) =>
     request.nextUrl.pathname.startsWith(path)
   );
 
-  if (isProtected && !session) {
+  if (isProtected && !user) {
     const redirectUrl = new URL("/login", request.url);
     redirectUrl.searchParams.set("redirect", request.nextUrl.pathname);
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (request.nextUrl.pathname === "/login" && session) {
+  if (request.nextUrl.pathname === "/login" && user) {
     return NextResponse.redirect(new URL("/app", request.url));
   }
 

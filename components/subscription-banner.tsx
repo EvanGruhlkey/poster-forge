@@ -12,6 +12,7 @@ export function SubscriptionBanner() {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
+    setHasSub(null);
     async function check() {
       try {
         const res = await fetch("/api/subscription");
