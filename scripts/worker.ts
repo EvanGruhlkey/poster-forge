@@ -135,14 +135,17 @@ function runPythonCli(
       stderr += d.toString();
     });
 
-    proc.on("close", (code) => {
+    proc.on("close", (code, signal) => {
       clearTimeout(timeout);
       if (killed) return;
 
-      if (code !== 0) {
-        console.error(`  Python exited with code ${code}`);
+      if (code !== 0 || signal) {
+        const reason = signal
+          ? `killed by signal ${signal} (likely OOM — increase Railway memory limit)`
+          : `exited with code ${code}`;
+        console.error(`  Python process ${reason}`);
         console.error(`  stderr: ${stderr.substring(0, 500)}`);
-        reject(new Error(`Python process exited with code ${code}: ${stderr.substring(0, 300)}`));
+        reject(new Error(`Python process ${reason}: ${stderr.substring(0, 300)}`));
         return;
       }
 
