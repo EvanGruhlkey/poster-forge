@@ -1,0 +1,63 @@
+# ── Poster Armory Worker ─────────────────────────────────────────────────────
+# Python 3.11 + Node.js 20 image.
+# Runs scripts/worker.ts which polls Supabase for jobs and calls the Python
+# poster CLI to generate images.
+# ─────────────────────────────────────────────────────────────────────────────
+FROM python:3.11-slim
+
+# ── System dependencies ───────────────────────────────────────────────────────
+# freetype + fontconfig: matplotlib font rendering
+# libglib2.0-0: indirect dep of some geo packages
+# curl + gnupg: needed to install NodeSource repo
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    gnupg \
+    ca-certificates \
+    libfreetype6 \
+    libfontconfig1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Node.js 20 ────────────────────────────────────────────────────────────────
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── pnpm + tsx ────────────────────────────────────────────────────────────────
+RUN npm install -g pnpm tsx
+
+WORKDIR /app
+
+# ── Python dependencies ───────────────────────────────────────────────────────
+# Copy first so Docker can cache this layer independently of source changes.
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ── Node dependencies ─────────────────────────────────────────────────────────
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prefer-offline
+
+# ── Application source ────────────────────────────────────────────────────────
+COPY scripts/        ./scripts/
+COPY create_map_poster.py font_management.py ./
+COPY themes/         ./themes/
+
+# ── Runtime directories ───────────────────────────────────────────────────────
+# cache/  – OSM data cache (persists across restarts if a Railway volume is mounted)
+# tmp/    – per-job scratch space
+# posters/– Python CLI output dir (files are moved to Supabase Storage immediately)
+# fonts/  – downloaded Google Fonts cache
+RUN mkdir -p cache tmp posters fonts
+
+# ── Environment ───────────────────────────────────────────────────────────────
+ENV PYTHON_EXECUTABLE=python3
+ENV POSTER_CLI_PATH=./create_map_poster.py
+ENV NODE_ENV=production
+# CACHE_DIR is read by create_map_poster.py
+ENV CACHE_DIR=/app/cache
+
+# Required at runtime (set in Railway dashboard, NOT here):
+#   NEXT_PUBLIC_SUPABASE_URL
+#   SUPABASE_SERVICE_ROLE_KEY
+
+CMD ["tsx", "scripts/worker.ts"]

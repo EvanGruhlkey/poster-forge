@@ -1,0 +1,46 @@
+# Next.js build output
+.next/
+out/
+
+# Node modules
+node_modules/
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Environment files (secrets must be set in Railway dashboard)
+.env
+.env.local
+.env.*.local
+
+# Generated at runtime — not needed in the image
+posters/
+tmp/
+cache/
+fonts/
+
+# Git
+.git/
+.gitignore
+
+# Video projects (large, not used by worker)
+demo-video/
+promo-video/
+
+# Agent / skill files
+.agents/
+
+# Vercel
+.vercel
+
+# OS
+.DS_Store
+Thumbs.db

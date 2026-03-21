@@ -1,0 +1,12 @@
+[build]
+  dockerfilePath = "Dockerfile.worker"
+
+[deploy]
+  # Restart automatically on crash; Railway will back off after repeated failures.
+  restartPolicyType    = "on_failure"
+  restartPolicyMaxRetries = 10
+
+  # Optional: mount a persistent volume at /app/cache so OSM tile data
+  # survives restarts and you don't re-download map data on every deploy.
+  # To enable: go to Railway dashboard → your service → Volumes → Add Volume
+  # Mount path: /app/cache
