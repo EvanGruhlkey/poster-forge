@@ -659,14 +659,13 @@ def create_poster(
         # For scripts like Arabic, Thai, Japanese, etc.
         spaced_city = display_city
 
-    # Dynamically adjust font size based on city name length to prevent truncation
-    # We use the already scaled "main" font size as the starting point.
+    # Dynamically adjust font size based on rendered text width to prevent overflow.
+    # Use spaced_city length since that's what actually gets rendered.
     base_adjusted_main = base_main * scale_factor
-    city_char_count = len(display_city)
+    visual_length = len(spaced_city)
 
-    # Heuristic: If length is > 10, start reducing.
-    if city_char_count > 10:
-        length_factor = 10 / city_char_count
+    if visual_length > 20:
+        length_factor = 20 / visual_length
         adjusted_font_size = max(base_adjusted_main * length_factor, 10 * scale_factor)
     else:
         adjusted_font_size = base_adjusted_main
