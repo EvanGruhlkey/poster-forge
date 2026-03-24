@@ -735,17 +735,17 @@ def create_poster(
 
     # --- ATTRIBUTION (bottom right) ---
     if FONTS:
-        font_attr = FontProperties(fname=FONTS["light"], size=3)
+        font_attr = FontProperties(fname=FONTS["light"], size=8)
     else:
-        font_attr = FontProperties(family="monospace", size=3)
+        font_attr = FontProperties(family="monospace", size=8)
 
     ax.text(
-        0.99,
-        0.005,
-        "© OpenStreetMap",
+        0.98,
+        0.02,
+        "© OpenStreetMap contributors",
         transform=ax.transAxes,
         color=THEME["text"],
-        alpha=0.15,
+        alpha=0.5,
         ha="right",
         va="bottom",
         fontproperties=font_attr,
@@ -969,13 +969,13 @@ Examples:
         sys.exit(0)
 
     # Validate required arguments
-    if not args.city:
-        print("Error: --city is required.\n")
+    if not args.city or not args.country:
+        print("Error: --city and --country are required.\n")
         print_examples()
         sys.exit(1)
 
-    if not args.country:
-        args.country = ""
+
+
 
     # Enforce maximum dimensions
     if args.width > 20:
