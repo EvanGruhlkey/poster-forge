@@ -3,6 +3,14 @@ import { stripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type Stripe from "stripe";
 
+function getPeriodEnd(sub: Stripe.Subscription): string {
+  const ts =
+    (sub as any).current_period_end ??
+    sub.items?.data?.[0]?.current_period_end;
+  if (ts) return new Date(ts * 1000).toISOString();
+  return new Date(Date.now() + 30 * 86400_000).toISOString();
+}
+
 export async function POST(request: Request) {
   const body = await request.text();
   const sig = request.headers.get("stripe-signature");
@@ -73,7 +81,7 @@ export async function POST(request: Request) {
           const expiresAt = new Date();
           expiresAt.setHours(expiresAt.getHours() + 24);
 
-          await admin.from("subscriptions").insert({
+          const { error: insertErr } = await admin.from("subscriptions").insert({
             user_id: userId,
             plan_slug: planSlug,
             status: "active",
@@ -84,6 +92,7 @@ export async function POST(request: Request) {
                 ? session.customer
                 : session.customer?.id || null,
           });
+          if (insertErr?.code === "23505") break;
         }
 
         if (session.mode === "subscription" && session.subscription) {
@@ -94,13 +103,11 @@ export async function POST(request: Request) {
 
           const sub = await stripe.subscriptions.retrieve(subId);
 
-          await admin.from("subscriptions").insert({
+          const { error: insertErr } = await admin.from("subscriptions").insert({
             user_id: userId,
             plan_slug: planSlug,
             status: sub.status === "active" ? "active" : "inactive",
-            current_period_end: new Date(
-              sub.current_period_end * 1000
-            ).toISOString(),
+            current_period_end: getPeriodEnd(sub),
             stripe_checkout_session_id: session.id,
             stripe_customer_id:
               typeof sub.customer === "string"
@@ -108,6 +115,7 @@ export async function POST(request: Request) {
                 : sub.customer.id,
             stripe_sub_id: sub.id,
           });
+          if (insertErr?.code === "23505") break;
         }
         break;
       }
@@ -128,11 +136,29 @@ export async function POST(request: Request) {
           .from("subscriptions")
           .update({
             status,
-            current_period_end: new Date(
-              sub.current_period_end * 1000
-            ).toISOString(),
+            current_period_end: getPeriodEnd(sub),
           })
           .eq("stripe_sub_id", stripeSubId);
+        break;
+      }
+
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object as Stripe.Invoice;
+        if (invoice.subscription) {
+          const subId =
+            typeof invoice.subscription === "string"
+              ? invoice.subscription
+              : invoice.subscription.id;
+
+          const sub = await stripe.subscriptions.retrieve(subId);
+          await admin
+            .from("subscriptions")
+            .update({
+              status: sub.status === "active" ? "active" : "inactive",
+              current_period_end: getPeriodEnd(sub),
+            })
+            .eq("stripe_sub_id", subId);
+        }
         break;
       }
 

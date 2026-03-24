@@ -5,6 +5,15 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { stripe } from "@/lib/stripe";
 import { applyRateLimit } from "@/lib/rate-limit";
+import type Stripe from "stripe";
+
+function getPeriodEnd(sub: Stripe.Subscription): string {
+  const ts =
+    (sub as any).current_period_end ??
+    sub.items?.data?.[0]?.current_period_end;
+  if (ts) return new Date(ts * 1000).toISOString();
+  return new Date(Date.now() + 30 * 86400_000).toISOString();
+}
 
 export async function POST(request: Request) {
   try {
@@ -97,23 +106,24 @@ export async function POST(request: Request) {
 
       const sub = await stripe.subscriptions.retrieve(subId);
 
-      await admin.from("subscriptions").insert({
+      const { error: insertErr } = await admin.from("subscriptions").insert({
         user_id: user.id,
         plan_slug: planSlug,
         status: sub.status === "active" ? "active" : "inactive",
-        current_period_end: new Date(
-          sub.current_period_end * 1000
-        ).toISOString(),
+        current_period_end: getPeriodEnd(sub),
         stripe_checkout_session_id: sessionId,
         stripe_customer_id:
           typeof sub.customer === "string" ? sub.customer : sub.customer.id,
         stripe_sub_id: sub.id,
       });
+      if (insertErr?.code === "23505") {
+        return NextResponse.json({ status: "already_active" });
+      }
     } else if (session.mode === "payment") {
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + 24);
 
-      await admin.from("subscriptions").insert({
+      const { error: insertErr } = await admin.from("subscriptions").insert({
         user_id: user.id,
         plan_slug: planSlug,
         status: "active",
@@ -124,6 +134,9 @@ export async function POST(request: Request) {
             ? session.customer
             : session.customer?.id || null,
       });
+      if (insertErr?.code === "23505") {
+        return NextResponse.json({ status: "already_active" });
+      }
     }
 
     return NextResponse.json({ status: "activated" });

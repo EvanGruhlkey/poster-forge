@@ -607,9 +607,10 @@ def create_poster(
         show=False,
         close=False,
     )
-    ax.set_aspect("equal", adjustable="box")
+    ax.set_aspect("equal", adjustable="datalim")
     ax.set_xlim(crop_xlim)
     ax.set_ylim(crop_ylim)
+    ax.set_position((0.0, 0.0, 1.0, 1.0))
 
     # Layer 3: Gradients (Top and Bottom)
     create_gradient_fade(ax, THEME['gradient_color'], location='bottom', zorder=10)
@@ -755,14 +756,14 @@ def create_poster(
     # 5. Save
     print(f"Saving to {output_file}...")
 
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+
     fmt = output_format.lower()
     save_kwargs = dict(
         facecolor=THEME["bg"],
-        bbox_inches="tight",
-        pad_inches=0.05,
+        pad_inches=0,
     )
 
-    # DPI matters mainly for raster formats
     if fmt == "png":
         save_kwargs["dpi"] = 300
 
