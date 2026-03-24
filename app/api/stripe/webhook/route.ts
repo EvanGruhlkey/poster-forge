@@ -122,13 +122,15 @@ export async function POST(request: Request) {
 
       case "customer.subscription.updated":
       case "customer.subscription.deleted": {
-        const sub = event.data.object as Stripe.Subscription;
-        const stripeSubId = sub.id;
+        const liveSub = await stripe.subscriptions.retrieve(
+          (event.data.object as Stripe.Subscription).id
+        );
+        const stripeSubId = liveSub.id;
 
         const status =
-          sub.status === "active"
+          liveSub.status === "active"
             ? "active"
-            : sub.status === "canceled"
+            : liveSub.status === "canceled"
               ? "cancelled"
               : "inactive";
 
@@ -136,7 +138,7 @@ export async function POST(request: Request) {
           .from("subscriptions")
           .update({
             status,
-            current_period_end: getPeriodEnd(sub),
+            current_period_end: getPeriodEnd(liveSub),
           })
           .eq("stripe_sub_id", stripeSubId);
         break;
