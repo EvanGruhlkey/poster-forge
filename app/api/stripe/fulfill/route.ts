@@ -10,7 +10,7 @@ import type Stripe from "stripe";
 function getPeriodEnd(sub: Stripe.Subscription): string {
   const ts =
     (sub as any).current_period_end ??
-    sub.items?.data?.[0]?.current_period_end;
+    (sub.items?.data?.[0] as any)?.current_period_end;
   if (ts) return new Date(ts * 1000).toISOString();
   return new Date(Date.now() + 30 * 86400_000).toISOString();
 }
