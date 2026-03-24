@@ -607,7 +607,6 @@ def create_poster(
         show=False,
         close=False,
     )
-    ax.set_aspect("equal", adjustable="box")
     ax.set_xlim(crop_xlim)
     ax.set_ylim(crop_ylim)
 
@@ -731,31 +730,37 @@ def create_poster(
 
     # --- ATTRIBUTION (bottom right) ---
     if FONTS:
-        font_attr = FontProperties(fname=FONTS["light"], size=8)
+        font_attr = FontProperties(fname=FONTS["light"], size=4)
     else:
-        font_attr = FontProperties(family="monospace", size=8)
+        font_attr = FontProperties(family="monospace", size=4)
 
     ax.text(
-        0.98,
-        0.02,
+        0.99,
+        0.008,
         "© OpenStreetMap contributors",
         transform=ax.transAxes,
         color=THEME["text"],
-        alpha=0.5,
+        alpha=0.25,
         ha="right",
         va="bottom",
         fontproperties=font_attr,
         zorder=11,
     )
 
-    # 5. Save
+    # 5. Save — ensure axes fills the entire figure with zero margins
+    ax.set_position([0, 0, 1, 1])
+    ax.margins(0)
+    ax.set_xlim(crop_xlim)
+    ax.set_ylim(crop_ylim)
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+
     print(f"Saving to {output_file}...")
 
     fmt = output_format.lower()
     save_kwargs = dict(
         facecolor=THEME["bg"],
-        bbox_inches="tight",
-        pad_inches=0.05,
+        bbox_inches=None,
+        pad_inches=0,
     )
 
     # DPI matters mainly for raster formats
