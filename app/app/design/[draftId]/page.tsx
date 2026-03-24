@@ -462,7 +462,7 @@ export default function CustomizePosterPage() {
                 <ProtectedImage
                   src={previewUrl}
                   alt="Poster preview"
-                  className="h-full w-full object-contain"
+                  className="h-full w-full object-cover"
                   bgColor={currentStyle.bgColor}
                   textColor={currentStyle.textColor}
                 />

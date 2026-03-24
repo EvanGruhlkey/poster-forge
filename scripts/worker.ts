@@ -244,7 +244,7 @@ async function processJob(jobId: string): Promise<void> {
     if (isPreview) {
       // Generate a single small preview PNG
       const outputFile = path.join(jobDir, "preview.png");
-      await runPythonCli(config, outputFile, "png", 4.5, 6);
+      await runPythonCli(config, outputFile, "png", 4, 5.3);
 
       const storagePath = `${userId}/${jobId}/preview.png`;
       await uploadFile(outputFile, storagePath);
