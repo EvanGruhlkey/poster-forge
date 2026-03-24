@@ -6,6 +6,7 @@ interface ProtectedImageProps {
   src: string;
   alt: string;
   className?: string;
+  containerClassName?: string;
   watermark?: boolean;
   bgColor?: string;
   textColor?: string;
@@ -15,6 +16,7 @@ export function ProtectedImage({
   src,
   alt,
   className,
+  containerClassName,
   watermark = true,
   bgColor,
   textColor,
@@ -55,7 +57,7 @@ export function ProtectedImage({
   return (
     <div
       ref={containerRef}
-      className="protected-image-container relative select-none"
+      className={`protected-image-container relative select-none ${containerClassName || ""}`}
       style={{ lineHeight: 0 }}
     >
       <img

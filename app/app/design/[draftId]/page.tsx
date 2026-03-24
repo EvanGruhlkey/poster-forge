@@ -463,6 +463,7 @@ export default function CustomizePosterPage() {
                   src={previewUrl}
                   alt="Poster preview"
                   className="h-full w-full object-cover"
+                  containerClassName="h-full w-full"
                   bgColor={currentStyle.bgColor}
                   textColor={currentStyle.textColor}
                 />
