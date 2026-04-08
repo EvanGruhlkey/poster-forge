@@ -6,7 +6,6 @@ import { createClient } from "@supabase/supabase-js";
 import { spawn } from "child_process";
 import * as fs from "fs";
 import * as crypto from "crypto";
-import { usageStatsPeriodBounds } from "../lib/billing-period";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -32,6 +31,30 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
+/**
+ * Mirrors lib/billing-period.ts — inlined so the Railway/Docker worker image
+ * (which only copies scripts/, not lib/) does not need extra modules.
+ */
+function usageStatsPeriodBounds(sub: {
+  current_period_start: string | null;
+  current_period_end: string | null;
+  stripe_sub_id: string | null;
+  created_at: string;
+}): { start: Date; end: Date } {
+  const end = sub.current_period_end
+    ? new Date(sub.current_period_end)
+    : new Date(sub.created_at);
+  let start: Date;
+  if (sub.current_period_start) {
+    start = new Date(sub.current_period_start);
+  } else if (!sub.stripe_sub_id) {
+    start = new Date(sub.created_at);
+  } else {
+    start = new Date(end);
+    start.setUTCMonth(start.getUTCMonth() - 1);
+  }
+  return { start, end };
+}
 
 const SIZES = [
   { key: "png_24x36", width: 12, height: 18 },
