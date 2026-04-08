@@ -6,7 +6,7 @@ import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle, MapPin, Palette, Download } from "lucide-react";
+import { CheckCircle, MapPin, Palette, Download, ChevronDown } from "lucide-react";
 
 const GH_RAW =
   "https://raw.githubusercontent.com/EvanGruhlkey/poster-forge/main/posters";
@@ -80,6 +80,37 @@ const STEPS = [
     title: "Download & Print",
     desc: "Get high-res PDF and PNG files ready for any frame size.",
     icon: Download,
+  },
+];
+
+const FAQ_ITEMS = [
+  {
+    q: "What do I get when I create a poster?",
+    a: "You get preview designs in the app, then high-resolution downloads (PDF and PNG sizes for your plan) ready to print or send to a professional printer.",
+  },
+  {
+    q: "How long does a download take?",
+    a: "Roughly up to five minutes, depending on the map area and theme. We fetch real map data and render high-resolution files. You can click away, use another tab, or leave the app; your poster keeps generating and will show in your library when it is ready.",
+  },
+  {
+    q: "Do I need a subscription?",
+    a: "You can browse the app, but generating and downloading posters requires an active plan. Pick the tier that matches how many designs and downloads you want each month.",
+  },
+  {
+    q: "Can I use any location?",
+    a: "Yes. Search for cities worldwide, fine-tune the map area with radius and position, and add your own title and subtitle.",
+  },
+  {
+    q: "Will it look good printed?",
+    a: "Exports are built for print: vector PDF where available and crisp PNGs at standard poster aspect ratios. Use a quality print shop or home printer that supports your chosen size.",
+  },
+  {
+    q: "Can I cancel anytime?",
+    a: "Yes. You can cancel from Billing; recurring plans stay active through the period you already paid for. See our Terms for details.",
+  },
+  {
+    q: "Where do I get help?",
+    a: "Use the in-app flows for billing and downloads. For account or payment issues, contact support through the same email you use for your account.",
   },
 ];
 
@@ -189,8 +220,30 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Demo video */}
+      <section className="border-t py-16">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <h2 className="mb-3 text-center text-3xl font-bold">See it in action</h2>
+          <p className="mx-auto mb-10 max-w-2xl text-center text-muted-foreground">
+            Watch how easy it is to go from a place you love to a print-ready map poster.
+          </p>
+          <div className="relative mx-auto aspect-video w-full max-w-4xl overflow-hidden rounded-2xl border bg-black shadow-2xl ring-1 ring-border">
+            <video
+              className="absolute inset-0 block h-full w-full object-cover object-center outline-none"
+              controls
+              playsInline
+              preload="metadata"
+              aria-label="Poster Armory demo: creating a map poster"
+            >
+              <source src="/demo.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+        </div>
+      </section>
+
       {/* Gallery — More examples */}
-      <section className="py-16">
+      <section className="border-t bg-muted/30 py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <h2 className="mb-3 text-center text-3xl font-bold">
             Stunning Results, Every City
@@ -221,6 +274,34 @@ export default function LandingPage() {
                   </p>
                 </div>
               </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="border-t py-16">
+        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+          <h2 className="mb-3 text-center text-3xl font-bold">Frequently asked questions</h2>
+          <p className="mb-10 text-center text-muted-foreground">
+            Quick answers about creating and printing your map art.
+          </p>
+          <div className="space-y-2">
+            {FAQ_ITEMS.map((item) => (
+              <details
+                key={item.q}
+                className="group rounded-xl border bg-card text-card-foreground shadow-sm transition-shadow open:shadow-md"
+              >
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-left font-medium marker:content-none [&::-webkit-details-marker]:hidden">
+                  {item.q}
+                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180" />
+                </summary>
+                <div className="border-t px-5 pb-4 pt-0">
+                  <p className="pt-3 text-sm leading-relaxed text-muted-foreground">
+                    {item.a}
+                  </p>
+                </div>
+              </details>
             ))}
           </div>
         </div>
