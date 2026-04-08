@@ -13,7 +13,23 @@ const PYTHON_EXECUTABLE = process.env.PYTHON_EXECUTABLE || "python";
 const POSTER_CLI_PATH =
   process.env.POSTER_CLI_PATH || "./create_map_poster.py";
 const POLL_INTERVAL_MS = 5000;
-const PYTHON_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+/** Max time for one Python CLI run. Map + some themes can exceed 5m on cold cache. */
+function resolvePythonTimeoutMs(): number {
+  const fromMs = process.env.POSTER_CLI_TIMEOUT_MS;
+  if (fromMs) {
+    const n = parseInt(fromMs, 10);
+    if (!Number.isNaN(n) && n >= 60_000) return n;
+  }
+  const fromSec = process.env.POSTER_CLI_TIMEOUT_SEC;
+  if (fromSec) {
+    const n = parseInt(fromSec, 10);
+    if (!Number.isNaN(n) && n >= 60) return n * 1000;
+  }
+  return 15 * 60 * 1000; // 15 minutes default
+}
+
+const PYTHON_TIMEOUT_MS = resolvePythonTimeoutMs();
 const STUCK_JOB_CHECK_INTERVAL = 12; // check every 12 polls (~60s)
 const TMP_DIR = path.resolve("tmp");
 
@@ -415,7 +431,9 @@ async function main() {
   console.log(`  Python: ${PYTHON_EXECUTABLE}`);
   console.log(`  CLI: ${POSTER_CLI_PATH}`);
   console.log(`  Polling every ${POLL_INTERVAL_MS}ms`);
-  console.log(`  Python timeout: ${PYTHON_TIMEOUT_MS / 1000}s`);
+  console.log(
+    `  Python timeout: ${PYTHON_TIMEOUT_MS / 1000}s (POSTER_CLI_TIMEOUT_SEC / POSTER_CLI_TIMEOUT_MS)`
+  );
   console.log("");
 
   ensureTmpDir();

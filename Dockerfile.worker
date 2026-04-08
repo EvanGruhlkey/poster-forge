@@ -59,5 +59,6 @@ ENV CACHE_DIR=/app/cache
 # Required at runtime (set in Railway dashboard, NOT here):
 #   NEXT_PUBLIC_SUPABASE_URL
 #   SUPABASE_SERVICE_ROLE_KEY
+# Optional: POSTER_CLI_TIMEOUT_SEC (e.g. 900) — seconds for one Python render (default 900).
 
 CMD ["tsx", "scripts/worker.ts"]
