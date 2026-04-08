@@ -24,7 +24,7 @@ export async function GET() {
 
     const admin = createAdminClient();
 
-    const { data: sub } = await admin
+    const { data: sub, error: subErr } = await admin
       .from("subscriptions")
       .select(
         "id, plan_slug, status, current_period_end, current_period_start, created_at, stripe_sub_id"
@@ -33,7 +33,15 @@ export async function GET() {
       .eq("status", "active")
       .order("created_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
+
+    if (subErr) {
+      console.error("subscriptions lookup error:", subErr);
+      return NextResponse.json(
+        { error: "Failed to load subscription" },
+        { status: 500 }
+      );
+    }
 
     if (!sub) {
       // Check if there's a recently expired/cancelled sub for the expired banner
@@ -101,35 +109,46 @@ export async function GET() {
       }
     }
 
-    // Usage for current Stripe billing window (or pass window for one-time subs)
+    // Usage for current billing window — never fail the whole response if counts fail
     let designUsage = 0;
     let downloadUsage = 0;
-    const periodStartIso = await resolveQuotaPeriodStartIso(
-      admin,
-      stripe,
-      sub,
-      stripeSubCached
-    );
+    let periodStartIso: string;
+    try {
+      periodStartIso = await resolveQuotaPeriodStartIso(
+        admin,
+        stripe,
+        sub,
+        stripeSubCached
+      );
+    } catch (e) {
+      console.error("resolveQuotaPeriodStartIso:", e);
+      periodStartIso = sub.current_period_start
+        ? new Date(sub.current_period_start).toISOString()
+        : new Date(sub.created_at).toISOString();
+    }
 
-    const [designCount, downloadCount] = await Promise.all([
-      admin
-        .from("poster_jobs")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("status", "done")
-        .eq("is_preview", true)
-        .gte("created_at", periodStartIso),
-      admin
-        .from("poster_jobs")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("status", "done")
-        .eq("is_preview", false)
-        .gte("created_at", periodStartIso),
-    ]);
-
-    designUsage = designCount.count || 0;
-    downloadUsage = downloadCount.count || 0;
+    try {
+      const [designCount, downloadCount] = await Promise.all([
+        admin
+          .from("poster_jobs")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("status", "done")
+          .eq("is_preview", true)
+          .gte("created_at", periodStartIso),
+        admin
+          .from("poster_jobs")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("status", "done")
+          .eq("is_preview", false)
+          .gte("created_at", periodStartIso),
+      ]);
+      designUsage = designCount.count || 0;
+      downloadUsage = downloadCount.count || 0;
+    } catch (e) {
+      console.error("subscription usage counts:", e);
+    }
 
     return NextResponse.json({
       active: true,

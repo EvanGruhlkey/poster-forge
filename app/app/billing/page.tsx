@@ -29,6 +29,8 @@ import { toast } from "sonner";
 interface SubscriptionData {
   active: boolean;
   expired?: boolean;
+  /** Set when /api/subscription returned 4xx/5xx so we do not show "no plan" */
+  loadError?: string;
   cancelAtPeriodEnd?: boolean;
   subscription: {
     id: string;
@@ -98,9 +100,36 @@ export default function BillingPage() {
           if (!subData.active) {
             setShowPlans(true);
           }
+        } else {
+          let msg = "Could not verify your subscription.";
+          if (res.status === 401) {
+            msg = "Please sign in again to view billing.";
+          }
+          try {
+            const body = await res.json();
+            if (body?.error && typeof body.error === "string") {
+              msg = body.error;
+            }
+          } catch {
+            /* ignore */
+          }
+          toast.error(msg);
+          setData({
+            active: false,
+            expired: false,
+            loadError: msg,
+            subscription: null,
+          });
+          setShowPlans(true);
         }
       } catch {
         toast.error("Failed to load subscription data.");
+        setData({
+          active: false,
+          loadError: "Network error",
+          subscription: null,
+        });
+        setShowPlans(true);
       } finally {
         setLoading(false);
       }
@@ -295,15 +324,27 @@ export default function BillingPage() {
 
       {/* No Plan Banner */}
       {!hasActiveSub && !data?.expired && (
-        <Card className="mb-8 border-blue-200 bg-blue-50">
+        <Card
+          className={`mb-8 ${data?.loadError ? "border-amber-200 bg-amber-50" : "border-blue-200 bg-blue-50"}`}
+        >
           <CardContent className="flex items-center gap-3 py-4">
-            <CreditCard className="h-5 w-5 shrink-0 text-blue-600" />
+            <CreditCard
+              className={`h-5 w-5 shrink-0 ${data?.loadError ? "text-amber-600" : "text-blue-600"}`}
+            />
             <div>
-              <p className="font-medium text-blue-900">
-                No active plan
+              <p
+                className={`font-medium ${data?.loadError ? "text-amber-900" : "text-blue-900"}`}
+              >
+                {data?.loadError
+                  ? "Could not load subscription status"
+                  : "No active plan"}
               </p>
-              <p className="text-sm text-blue-700">
-                Choose a plan below to start creating map posters.
+              <p
+                className={`text-sm ${data?.loadError ? "text-amber-800" : "text-blue-700"}`}
+              >
+                {data?.loadError
+                  ? "Try refreshing. If you still see this, confirm you are logged into the right account and that Vercel env vars use the same Supabase project as the table you inspected."
+                  : "Choose a plan below to start creating map posters."}
               </p>
             </div>
           </CardContent>

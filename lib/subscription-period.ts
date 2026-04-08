@@ -23,21 +23,26 @@ export async function resolveQuotaPeriodStartIso(
     return new Date(sub.created_at).toISOString();
   }
 
-  const stripeSub =
-    cachedStripeSub ??
-    (await stripe.subscriptions.retrieve(sub.stripe_sub_id));
-  const startIso = new Date(
-    stripeSub.current_period_start * 1000
-  ).toISOString();
-  const endIso = new Date(stripeSub.current_period_end * 1000).toISOString();
+  try {
+    const stripeSub =
+      cachedStripeSub ??
+      (await stripe.subscriptions.retrieve(sub.stripe_sub_id));
+    const startIso = new Date(
+      stripeSub.current_period_start * 1000
+    ).toISOString();
+    const endIso = new Date(stripeSub.current_period_end * 1000).toISOString();
 
-  await admin
-    .from("subscriptions")
-    .update({
-      current_period_start: startIso,
-      current_period_end: endIso,
-    })
-    .eq("id", sub.id);
+    await admin
+      .from("subscriptions")
+      .update({
+        current_period_start: startIso,
+        current_period_end: endIso,
+      })
+      .eq("id", sub.id);
 
-  return startIso;
+    return startIso;
+  } catch {
+    // Stripe mismatch / network / bad key — do not break subscription UI
+    return new Date(sub.created_at).toISOString();
+  }
 }
