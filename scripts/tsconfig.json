@@ -8,10 +8,10 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "outDir": "../dist/scripts",
-    "rootDir": ".",
+    "rootDir": "..",
     "paths": {
-      "@/*": ["../*"]
+      "@/*": ["./*"]
     }
   },
-  "include": ["./**/*.ts"]
+  "include": ["./worker.ts", "../lib/billing-period.ts"]
 }

@@ -6,6 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { spawn } from "child_process";
 import * as fs from "fs";
 import * as crypto from "crypto";
+import { usageStatsPeriodBounds } from "../lib/billing-period";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -269,16 +270,18 @@ async function processJob(jobId: string): Promise<void> {
       await uploadFile(pdfFile, pdfPath);
       output.pdf = pdfPath;
 
-      // Generate SVG for Pro+ users
       const { data: userSub } = await supabase
         .from("subscriptions")
-        .select("plan_slug")
+        .select(
+          "plan_slug, current_period_start, current_period_end, stripe_sub_id, created_at"
+        )
         .eq("user_id", userId)
         .eq("status", "active")
         .order("created_at", { ascending: false })
         .limit(1)
         .single();
 
+      // Generate SVG for Pro+ users
       if (userSub?.plan_slug === "pro_plus") {
         const svgFile = path.join(jobDir, "poster.svg");
         await runPythonCli(config, svgFile, "svg", 12, 16);
@@ -304,21 +307,14 @@ async function processJob(jobId: string): Promise<void> {
         storage_paths: output,
       });
 
-      // Atomic usage increment (safe under concurrency)
-      const periodStart = new Date();
-      periodStart.setDate(1);
-      periodStart.setHours(0, 0, 0, 0);
-      const periodEnd = new Date(
-        periodStart.getFullYear(),
-        periodStart.getMonth() + 1,
-        0
-      );
-
-      await supabase.rpc("increment_usage", {
-        p_user_id: userId,
-        p_period_start: periodStart.toISOString().split("T")[0],
-        p_period_end: periodEnd.toISOString().split("T")[0],
-      });
+      if (userSub) {
+        const { start, end } = usageStatsPeriodBounds(userSub);
+        await supabase.rpc("increment_usage", {
+          p_user_id: userId,
+          p_period_start: start.toISOString().split("T")[0],
+          p_period_end: end.toISOString().split("T")[0],
+        });
+      }
     }
 
     // Mark done

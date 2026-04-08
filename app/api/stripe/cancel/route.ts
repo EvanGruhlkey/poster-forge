@@ -49,7 +49,7 @@ export async function POST() {
       });
 
       return NextResponse.json({
-        status: "cancelling",
+        status: "cancelled",
         cancelAt: sub.current_period_end,
       });
     }

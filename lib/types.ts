@@ -23,6 +23,7 @@ export interface Subscription {
   user_id: string;
   plan_slug: string;
   status: string;
+  current_period_start: string | null;
   current_period_end: string | null;
   stripe_customer_id: string | null;
   stripe_sub_id: string | null;

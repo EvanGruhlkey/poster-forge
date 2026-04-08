@@ -7,6 +7,14 @@ import { stripe } from "@/lib/stripe";
 import { applyRateLimit } from "@/lib/rate-limit";
 import type Stripe from "stripe";
 
+function getPeriodStart(sub: Stripe.Subscription): string {
+  const ts =
+    (sub as any).current_period_start ??
+    (sub.items?.data?.[0] as any)?.current_period_start;
+  if (ts) return new Date(ts * 1000).toISOString();
+  return new Date().toISOString();
+}
+
 function getPeriodEnd(sub: Stripe.Subscription): string {
   const ts =
     (sub as any).current_period_end ??
@@ -110,6 +118,7 @@ export async function POST(request: Request) {
         user_id: user.id,
         plan_slug: planSlug,
         status: sub.status === "active" ? "active" : "inactive",
+        current_period_start: getPeriodStart(sub),
         current_period_end: getPeriodEnd(sub),
         stripe_checkout_session_id: sessionId,
         stripe_customer_id:

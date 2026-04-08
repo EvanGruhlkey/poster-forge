@@ -3,6 +3,14 @@ import { stripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type Stripe from "stripe";
 
+function getPeriodStart(sub: Stripe.Subscription): string {
+  const ts =
+    (sub as any).current_period_start ??
+    (sub.items?.data?.[0] as any)?.current_period_start;
+  if (ts) return new Date(ts * 1000).toISOString();
+  return new Date().toISOString();
+}
+
 function getPeriodEnd(sub: Stripe.Subscription): string {
   const ts =
     (sub as any).current_period_end ??
@@ -107,6 +115,7 @@ export async function POST(request: Request) {
             user_id: userId,
             plan_slug: planSlug,
             status: sub.status === "active" ? "active" : "inactive",
+            current_period_start: getPeriodStart(sub),
             current_period_end: getPeriodEnd(sub),
             stripe_checkout_session_id: session.id,
             stripe_customer_id:
@@ -138,6 +147,7 @@ export async function POST(request: Request) {
           .from("subscriptions")
           .update({
             status,
+            current_period_start: getPeriodStart(liveSub),
             current_period_end: getPeriodEnd(liveSub),
           })
           .eq("stripe_sub_id", stripeSubId);
@@ -157,6 +167,7 @@ export async function POST(request: Request) {
             .from("subscriptions")
             .update({
               status: sub.status === "active" ? "active" : "inactive",
+              current_period_start: getPeriodStart(sub),
               current_period_end: getPeriodEnd(sub),
             })
             .eq("stripe_sub_id", subId);

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { stripe } from "@/lib/stripe";
 import { createJobSchema } from "@/lib/validations";
 import { computeConfigHash } from "@/lib/config-hash";
 import { applyRateLimit } from "@/lib/rate-limit";
+import { resolveQuotaPeriodStartIso } from "@/lib/subscription-period";
 
 export async function POST(request: Request) {
   try {
@@ -68,7 +70,9 @@ export async function POST(request: Request) {
     // Check subscription (must be active AND not expired)
     const { data: sub } = await admin
       .from("subscriptions")
-      .select("plan_slug, status, current_period_end")
+      .select(
+        "id, plan_slug, status, current_period_end, current_period_start, stripe_sub_id, created_at"
+      )
       .eq("user_id", user.id)
       .eq("status", "active")
       .order("created_at", { ascending: false })
@@ -115,8 +119,10 @@ export async function POST(request: Request) {
         : (plan?.monthly_download_quota ?? null);
     }
 
-    // Try atomic RPC first; fall back to inline check if the function
-    // hasn't been deployed yet (migration 003 not applied).
+    const periodStartIso = await resolveQuotaPeriodStartIso(admin, stripe, sub);
+
+    // Try atomic RPC first; fall back to inline check if PostgREST can't resolve it
+    // (e.g. migration not applied yet — deploy `005_billing_period_quota` before relying on RPC).
     const { data: jobId, error: rpcError } = await admin.rpc(
       "create_job_with_quota_check",
       {
@@ -125,6 +131,7 @@ export async function POST(request: Request) {
         p_config_hash: configHash,
         p_is_preview: is_preview,
         p_quota: quota,
+        p_period_start: periodStartIso,
       }
     );
 
@@ -151,7 +158,8 @@ export async function POST(request: Request) {
           config,
           configHash,
           is_preview,
-          quota
+          quota,
+          periodStartIso
         );
       }
 
@@ -172,7 +180,7 @@ export async function POST(request: Request) {
   }
 }
 
-/** Fallback when migration 003 hasn't been applied yet. */
+/** Fallback when `create_job_with_quota_check` isn't available in the database. */
 async function inlineCreateJob(
   admin: ReturnType<typeof createAdminClient>,
   supabase: ReturnType<typeof createClient>,
@@ -180,20 +188,17 @@ async function inlineCreateJob(
   config: Record<string, unknown>,
   configHash: string,
   isPreview: boolean,
-  quota: number | null
+  quota: number | null,
+  periodStartIso: string
 ) {
   if (quota !== null) {
-    const periodStart = new Date();
-    periodStart.setDate(1);
-    periodStart.setHours(0, 0, 0, 0);
-
     const { count } = await admin
       .from("poster_jobs")
       .select("*", { count: "exact", head: true })
       .eq("user_id", userId)
       .eq("is_preview", isPreview)
       .in("status", ["queued", "running", "done"])
-      .gte("created_at", periodStart.toISOString());
+      .gte("created_at", periodStartIso);
 
     if ((count || 0) >= quota) {
       const msg = isPreview

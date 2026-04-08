@@ -55,7 +55,6 @@ export default function BillingPage() {
   const [data, setData] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showPlans, setShowPlans] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
   const fulfilledRef = useRef(false);
 
   useEffect(() => {
@@ -145,14 +144,16 @@ export default function BillingPage() {
 
       {/* Current Plan Summary */}
       {hasActiveSub && sub && plan && (
-        <Card className="mb-8 border-green-200">
+        <Card
+          className={`mb-8 ${data?.cancelAtPeriodEnd ? "border-amber-200 bg-amber-50/30" : "border-green-200"}`}
+        >
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Current Plan</CardTitle>
               {data?.cancelAtPeriodEnd ? (
-                <Badge variant="secondary" className="gap-1 border-amber-300 bg-amber-100 text-amber-800">
+                <Badge variant="secondary" className="gap-1 border-muted-foreground/30 bg-muted text-foreground">
                   <Clock className="h-3 w-3" />
-                  Cancelling
+                  Cancelled
                 </Badge>
               ) : (
                 <Badge variant="default" className="gap-1 bg-green-600">
@@ -178,7 +179,7 @@ export default function BillingPage() {
                   <Clock className="mt-0.5 h-5 w-5 text-muted-foreground" />
                   <div>
                     <p className="text-sm font-medium">
-                      {data?.cancelAtPeriodEnd ? "Expires" : "Renews"}
+                      {data?.cancelAtPeriodEnd ? "Access until" : "Renews"}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {new Date(sub.current_period_end).toLocaleDateString(
@@ -187,8 +188,8 @@ export default function BillingPage() {
                       )}
                     </p>
                     {data?.cancelAtPeriodEnd && (
-                      <p className="text-xs text-amber-600 mt-1">
-                        Cancellation scheduled
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Subscription is cancelled. You keep full access through this date; it will not renew.
                       </p>
                     )}
                   </div>
@@ -203,7 +204,7 @@ export default function BillingPage() {
                       <div>
                         <p className="text-sm font-medium">Downloads</p>
                         <p className="text-sm text-muted-foreground">
-                          {data.downloadUsage || 0} / {data.downloadQuota} this month
+                          {data.downloadUsage || 0} / {data.downloadQuota} this billing period
                         </p>
                         <div className="mt-1 h-2 w-32 overflow-hidden rounded-full bg-muted">
                           <div
@@ -221,7 +222,7 @@ export default function BillingPage() {
                         <div>
                           <p className="text-sm font-medium">Designs</p>
                           <p className="text-sm text-muted-foreground">
-                            {data.designUsage || 0} / {data.designQuota} this month
+                            {data.designUsage || 0} / {data.designQuota} this billing period
                           </p>
                           <div className="mt-1 h-2 w-32 overflow-hidden rounded-full bg-muted">
                             <div
@@ -265,31 +266,9 @@ export default function BillingPage() {
                 <Button
                   variant="ghost"
                   className="text-destructive hover:text-destructive"
-                  disabled={cancelling}
-                  onClick={async () => {
-                    if (!confirm("Are you sure you want to cancel your subscription? You'll keep access until the end of your billing period.")) return;
-                    setCancelling(true);
-                    try {
-                      const res = await fetch("/api/stripe/cancel", { method: "POST" });
-                      const result = await res.json();
-                      if (res.ok) {
-                        toast.success("Subscription will cancel at the end of your billing period.");
-                        const subRes = await fetch("/api/subscription");
-                        if (subRes.ok) setData(await subRes.json());
-                      } else {
-                        toast.error(result.error || "Failed to cancel subscription.");
-                      }
-                    } catch {
-                      toast.error("Failed to cancel subscription.");
-                    } finally {
-                      setCancelling(false);
-                    }
-                  }}
+                  asChild
                 >
-                  {cancelling ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : null}
-                  Cancel Plan
+                  <Link href="/app/billing/cancel">Cancel Plan</Link>
                 </Button>
               )}
             </div>

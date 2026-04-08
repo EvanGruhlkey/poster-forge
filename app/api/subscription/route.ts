@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { stripe } from "@/lib/stripe";
 import { applyRateLimit } from "@/lib/rate-limit";
+import { resolveQuotaPeriodStartIso } from "@/lib/subscription-period";
+import type Stripe from "stripe";
 
 export async function GET() {
   try {
@@ -24,7 +26,9 @@ export async function GET() {
 
     const { data: sub } = await admin
       .from("subscriptions")
-      .select("id, plan_slug, status, current_period_end, created_at, stripe_sub_id")
+      .select(
+        "id, plan_slug, status, current_period_end, current_period_start, created_at, stripe_sub_id"
+      )
       .eq("user_id", user.id)
       .eq("status", "active")
       .order("created_at", { ascending: false })
@@ -86,23 +90,26 @@ export async function GET() {
       .eq("slug", sub.plan_slug)
       .single();
 
-    // Check if the Stripe subscription is set to cancel at period end
     let cancelAtPeriodEnd = false;
+    let stripeSubCached: Stripe.Subscription | undefined;
     if (sub.stripe_sub_id) {
       try {
-        const stripeSub = await stripe.subscriptions.retrieve(sub.stripe_sub_id);
-        cancelAtPeriodEnd = stripeSub.cancel_at_period_end;
+        stripeSubCached = await stripe.subscriptions.retrieve(sub.stripe_sub_id);
+        cancelAtPeriodEnd = stripeSubCached.cancel_at_period_end;
       } catch {
         // If Stripe lookup fails, don't block the response
       }
     }
 
-    // Fetch current period usage
+    // Usage for current Stripe billing window (or pass window for one-time subs)
     let designUsage = 0;
     let downloadUsage = 0;
-    const periodStart = new Date();
-    periodStart.setDate(1);
-    periodStart.setHours(0, 0, 0, 0);
+    const periodStartIso = await resolveQuotaPeriodStartIso(
+      admin,
+      stripe,
+      sub,
+      stripeSubCached
+    );
 
     const [designCount, downloadCount] = await Promise.all([
       admin
@@ -111,14 +118,14 @@ export async function GET() {
         .eq("user_id", user.id)
         .eq("status", "done")
         .eq("is_preview", true)
-        .gte("created_at", periodStart.toISOString()),
+        .gte("created_at", periodStartIso),
       admin
         .from("poster_jobs")
         .select("*", { count: "exact", head: true })
         .eq("user_id", user.id)
         .eq("status", "done")
         .eq("is_preview", false)
-        .gte("created_at", periodStart.toISOString()),
+        .gte("created_at", periodStartIso),
     ]);
 
     designUsage = designCount.count || 0;
