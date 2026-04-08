@@ -144,9 +144,7 @@ export default function BillingPage() {
 
       {/* Current Plan Summary */}
       {hasActiveSub && sub && plan && (
-        <Card
-          className={`mb-8 ${data?.cancelAtPeriodEnd ? "border-amber-200 bg-amber-50/30" : "border-green-200"}`}
-        >
+        <Card className="mb-8 border-green-200">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Current Plan</CardTitle>
@@ -187,11 +185,6 @@ export default function BillingPage() {
                         { month: "long", day: "numeric", year: "numeric" }
                       )}
                     </p>
-                    {data?.cancelAtPeriodEnd && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Subscription is cancelled. You keep full access through this date; it will not renew.
-                      </p>
-                    )}
                   </div>
                 </div>
               )}
@@ -204,7 +197,7 @@ export default function BillingPage() {
                       <div>
                         <p className="text-sm font-medium">Downloads</p>
                         <p className="text-sm text-muted-foreground">
-                          {data.downloadUsage || 0} / {data.downloadQuota} this billing period
+                          {data.downloadUsage || 0} / {data.downloadQuota} this month
                         </p>
                         <div className="mt-1 h-2 w-32 overflow-hidden rounded-full bg-muted">
                           <div
@@ -222,7 +215,7 @@ export default function BillingPage() {
                         <div>
                           <p className="text-sm font-medium">Designs</p>
                           <p className="text-sm text-muted-foreground">
-                            {data.designUsage || 0} / {data.designQuota} this billing period
+                            {data.designUsage || 0} / {data.designQuota} this month
                           </p>
                           <div className="mt-1 h-2 w-32 overflow-hidden rounded-full bg-muted">
                             <div
